@@ -366,27 +366,17 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     }
 
     /**
-     * VseMoiOnline: Auto-provision if this is the first launch (no servers configured)
-     * Only runs once per installation
+     * VseMoiOnline: Auto-provision if no servers configured
+     * Retries on every resume until successful
      */
     private fun checkAndAutoProvision() {
-        val prefs = getSharedPreferences("vsemoionline_prefs", MODE_PRIVATE)
-        val hasAttemptedProvisioning = prefs.getBoolean("has_attempted_provisioning", false)
-
-        // Skip if we've already tried provisioning
-        if (hasAttemptedProvisioning) {
-            return
-        }
-
         // Check if there are any servers configured
         val serverList = MmkvManager.decodeServerList()
         if (serverList.isEmpty()) {
             Log.i(AppConfig.TAG, "VseMoiOnline: No servers configured, attempting auto-provisioning")
 
-            // Mark that we've attempted provisioning (whether successful or not)
-            prefs.edit().putBoolean("has_attempted_provisioning", true).apply()
-
             // Trigger provisioning from default backend URL
+            // Will keep trying on every onResume() until a server is successfully added
             val defaultBackendUrl = "http://103.241.67.124:8888/provision"
             fetchAndImportConfig(defaultBackendUrl)
         }
