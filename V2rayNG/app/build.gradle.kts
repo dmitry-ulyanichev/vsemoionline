@@ -9,7 +9,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.v2ray.ang"
+        applicationId = "online.vsemoi"
         minSdk = 24
         targetSdk = 36
         versionCode = 684

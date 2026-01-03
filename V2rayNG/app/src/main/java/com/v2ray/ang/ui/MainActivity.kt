@@ -192,6 +192,98 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
                 }
             }
         })
+
+        // VseMoiOnline: Handle magic link on app startup
+        handleMagicLink(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // VseMoiOnline: Handle magic link when app is already running
+        handleMagicLink(intent)
+    }
+
+    /**
+     * VseMoiOnline: Handle magic link provisioning
+     * Extracts URL from vsemoionline://import?url=... and fetches VLESS config
+     */
+    private fun handleMagicLink(intent: Intent?) {
+        if (intent?.data?.scheme == "vsemoionline") {
+            val provisionUrl = intent.data?.getQueryParameter("url")
+            if (provisionUrl != null) {
+                Log.i(AppConfig.TAG, "VseMoiOnline: Magic link detected, provisioning from: $provisionUrl")
+                fetchAndImportConfig(provisionUrl)
+            } else {
+                Log.w(AppConfig.TAG, "VseMoiOnline: Magic link missing 'url' parameter")
+            }
+        }
+    }
+
+    /**
+     * VseMoiOnline: Get or create persistent device UUID
+     * Stored in SharedPreferences to identify this device across sessions
+     */
+    private fun getOrCreateDeviceId(): String {
+        val prefs = getSharedPreferences("vsemoionline_prefs", MODE_PRIVATE)
+        var deviceId = prefs.getString("device_id", null)
+
+        if (deviceId == null) {
+            deviceId = java.util.UUID.randomUUID().toString()
+            prefs.edit().putString("device_id", deviceId).apply()
+            Log.i(AppConfig.TAG, "VseMoiOnline: Generated new device UUID: $deviceId")
+        } else {
+            Log.i(AppConfig.TAG, "VseMoiOnline: Using existing device UUID: $deviceId")
+        }
+
+        return deviceId
+    }
+
+    /**
+     * VseMoiOnline: Fetch VLESS config from backend and import it
+     * Downloads config from URL with device_id parameter appended
+     */
+    private fun fetchAndImportConfig(baseUrl: String) {
+        binding.pbWaiting.show()
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val deviceId = getOrCreateDeviceId()
+                val separator = if (baseUrl.contains("?")) "&" else "?"
+                val fullUrl = "$baseUrl${separator}device_id=$deviceId"
+
+                Log.i(AppConfig.TAG, "VseMoiOnline: Fetching config from: $fullUrl")
+
+                // Download VLESS URI from backend
+                val url = java.net.URL(fullUrl)
+                val connection = url.openConnection() as java.net.HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 10000
+                connection.readTimeout = 10000
+
+                val responseCode = connection.responseCode
+                if (responseCode == java.net.HttpURLConnection.HTTP_OK) {
+                    val vlessUri = connection.inputStream.bufferedReader().readText().trim()
+                    Log.i(AppConfig.TAG, "VseMoiOnline: Received config, importing...")
+
+                    withContext(Dispatchers.Main) {
+                        // Import the VLESS URI using existing v2rayNG functionality
+                        importBatchConfig(vlessUri)
+                        toast(R.string.toast_success)
+                    }
+                } else {
+                    throw Exception("HTTP error: $responseCode")
+                }
+
+                connection.disconnect()
+
+            } catch (e: Exception) {
+                Log.e(AppConfig.TAG, "VseMoiOnline: Failed to fetch config", e)
+                withContext(Dispatchers.Main) {
+                    toastError("Failed to provision: ${e.message}")
+                    binding.pbWaiting.hide()
+                }
+            }
+        }
     }
 
     @SuppressLint("NotifyDataSetChanged")
@@ -268,6 +360,36 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     public override fun onResume() {
         super.onResume()
         mainViewModel.reloadServerList()
+
+        // VseMoiOnline: Auto-provision on first launch if no servers configured
+        checkAndAutoProvision()
+    }
+
+    /**
+     * VseMoiOnline: Auto-provision if this is the first launch (no servers configured)
+     * Only runs once per installation
+     */
+    private fun checkAndAutoProvision() {
+        val prefs = getSharedPreferences("vsemoionline_prefs", MODE_PRIVATE)
+        val hasAttemptedProvisioning = prefs.getBoolean("has_attempted_provisioning", false)
+
+        // Skip if we've already tried provisioning
+        if (hasAttemptedProvisioning) {
+            return
+        }
+
+        // Check if there are any servers configured
+        val serverList = MmkvManager.decodeServerList()
+        if (serverList.isEmpty()) {
+            Log.i(AppConfig.TAG, "VseMoiOnline: No servers configured, attempting auto-provisioning")
+
+            // Mark that we've attempted provisioning (whether successful or not)
+            prefs.edit().putBoolean("has_attempted_provisioning", true).apply()
+
+            // Trigger provisioning from default backend URL
+            val defaultBackendUrl = "http://103.241.67.124:8888/provision"
+            fetchAndImportConfig(defaultBackendUrl)
+        }
     }
 
     public override fun onPause() {

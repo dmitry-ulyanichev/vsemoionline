@@ -1,3 +1,5 @@
+/v2ray-backend
+.claude
 # Ignore data and key store files
 *.dat
 *.jks
@@ -64,3 +66,4 @@ V2rayNG/app/google-services.json
 # Ignore OS-specific files
 Thumbs.db
 .DS_Store
+.github/workflows/
