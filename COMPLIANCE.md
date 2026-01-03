@@ -68,7 +68,7 @@ VseMoiOnline is designed to remain compatible with standard VLESS configurations
 
 ### Differences from Upstream
 - Custom `applicationId` allows side-by-side installation with v2rayNG
-- Auto-provisioning feature (optional, only on first launch)
+- Auto-provisioning feature with retry-until-success behavior
 - Magic link import via `vsemoionline://` scheme
 - Device UUID generation for backend recognition
 
@@ -76,10 +76,11 @@ All v2rayNG features remain functional and unchanged.
 
 ## Automatic Provisioning
 
-The application performs automatic configuration provisioning only under these conditions:
-1. First app launch (cold start)
-2. No servers configured in app
-3. `has_attempted_provisioning` flag is false
+The application performs automatic configuration provisioning whenever:
+1. App resumes (comes to foreground)
+2. No servers are configured in app
+
+The provisioning retries on every app resume until successful.
 
 ### Privacy Considerations
 - A random UUID is generated and stored locally
@@ -89,11 +90,12 @@ The application performs automatic configuration provisioning only under these c
 - User can clear app data to reset UUID
 
 ### Network Behavior
-- Provisioning occurs only when app is in foreground
+- Provisioning occurs only when app resumes to foreground
 - No background or silent network activity
-- HTTP request to hardcoded backend URL (line 390 in MainActivity.kt)
-- Single request per installation (unless user clears app data)
+- HTTP request to hardcoded backend URL (line 380 in MainActivity.kt)
+- Retries on every app resume until server list is not empty
 - VPN connection never established automatically without user action
+- Resilient to temporary network failures and backend downtime
 
 ## Source Code Availability
 

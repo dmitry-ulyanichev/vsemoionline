@@ -91,21 +91,27 @@ The `handleMagicLink()` method:
 - `withContext(Dispatchers.Main)` for UI updates
 - Exception handling with user-facing error messages
 
-### Auto-Provisioning on First Launch
-**File**: `MainActivity.kt:372-393`
+### Auto-Provisioning Until Success
+**File**: `MainActivity.kt:372-383`
 
 `checkAndAutoProvision()` implementation:
-- Called from `onResume()` (line 365)
-- Checks `has_attempted_provisioning` flag in SharedPreferences
-- Runs only once per installation
-- Verifies server list is empty via `MmkvManager.decodeServerList()`
-- Triggers provisioning from hardcoded backend URL
-- Marks provisioning as attempted regardless of success
+- Called from `onResume()` every time app resumes (line 365)
+- Checks if server list is empty via `MmkvManager.decodeServerList()`
+- If empty → triggers provisioning from hardcoded backend URL
+- **Retries on every resume until successful**
+- No persistent "attempted" flag - server list itself is the state tracker
+- Stops retrying once any server is successfully added to list
 
-**Hardcoded Backend URL** (line 390):
+**Hardcoded Backend URL** (line 380):
 ```kotlin
 val defaultBackendUrl = "http://103.241.67.124:8888/provision"
 ```
+
+**Retry Behavior:**
+- ✅ Backend unavailable → Retries on next app resume
+- ✅ Network error → Retries on next app resume
+- ✅ Config import fails → Retries on next app resume
+- ✅ Success → Stops trying (server list no longer empty)
 
 ---
 
@@ -129,7 +135,14 @@ val defaultBackendUrl = "http://103.241.67.124:8888/provision"
 4. If empty, triggers `fetchAndImportConfig()` automatically
 5. Config imported silently in background
 6. User sees server appear in list
-7. Flag set: provisioning not attempted again
+7. On next resume, `serverList` is not empty → stops retrying
+
+**If Backend Unavailable:**
+1. User opens app, backend is down
+2. Provisioning fails (network error)
+3. User closes app, backend comes online
+4. User reopens app → `onResume()` triggers retry
+5. Provisioning succeeds → server added to list
 
 ---
 

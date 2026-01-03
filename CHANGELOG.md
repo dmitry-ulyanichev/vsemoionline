@@ -19,11 +19,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Device ID appended to provision URLs for server-side device recognition
   - Privacy-friendly: no hardware identifiers used
 
-- **Automatic provisioning on first launch**
-  - `checkAndAutoProvision()` triggered on app first run
+- **Automatic provisioning with retry**
+  - `checkAndAutoProvision()` triggered on every app resume
   - Checks for empty server list via `MmkvManager.decodeServerList()`
-  - One-time provisioning attempt per installation
-  - Persistent flag: `has_attempted_provisioning`
+  - Retries on every resume until successful
+  - No persistent "attempted" flag - resilient to network failures
 
 - **Network capabilities**
   - Coroutine-based asynchronous HTTP downloads (`Dispatchers.IO`)
