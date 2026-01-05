@@ -51,6 +51,34 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     }
 
     private val adapter by lazy { MainRecyclerAdapter(this) }
+
+    // VseMoiOnline: Provisioning configuration
+    companion object {
+        private const val PREFS_NAME = "vsemoionline_prefs"
+        private const val PREF_LAST_WORKING_URL = "last_working_provisioning_url"
+        private const val PREF_LAST_UPDATE_CHECK = "last_update_check_time"
+        private const val PROVISION_TIMEOUT_MS = 8000 // 8 seconds per attempt
+        private const val UPDATE_CHECK_INTERVAL_MS = 60 * 1000L // 6 hours = 6 * 60 * 60 * 1000L
+
+        // Primary provisioning URL (will be replaced with domain + HTTPS in production)
+        private const val PRIMARY_PROVISION_URL = "http://203.241.67.124:8888/provision"
+
+        // VPN server status endpoint (accessed through active VPN connection)
+        private const val VPN_STATUS_ENDPOINT = "http://103.241.67.124:8888/api/status"
+
+        // Fallback platform URLs - return plain text with current provisioning domain/IP
+        private val FALLBACK_PLATFORM_URLS = listOf(
+            "https://gist.githubusercontent.com/dmitry-ulyanichev/0b552cd7f00f8735f8a4832321825162/raw/a1592ec7783bd7c5248a19892779aa199feddd64/endpoint.txt"
+//            "https://raw.githubusercontent.com/YOUR_USERNAME/provision/main/endpoint.txt",
+//            "https://YOUR_WORKER.YOUR_SUBDOMAIN.workers.dev/provision",
+//            "https://YOUR_PROJECT.vercel.app/api/provision",
+//            "https://YOUR_SITE.netlify.app/.netlify/functions/provision",
+//            "https://pastebin.com/raw/YOUR_PASTE_ID",
+//            "https://gitlab.com/snippets/YOUR_SNIPPET_ID/raw"
+            // Add more as needed
+        )
+    }
+
     internal val requestVpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (it.resultCode == RESULT_OK) {
             startV2Ray()
@@ -75,6 +103,9 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     }
     private var mItemTouchHelper: ItemTouchHelper? = null
     val mainViewModel: MainViewModel by viewModels()
+
+    // VseMoiOnline: Flag to prevent duplicate provisioning attempts
+    private var isProvisioningInProgress = false
 
     // register activity result for requesting permission
     private val requestPermissionLauncher =
@@ -216,7 +247,16 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
             val provisionUrl = intent.data?.getQueryParameter("url")
             if (provisionUrl != null) {
                 Log.i(AppConfig.TAG, "VseMoiOnline: Magic link detected, provisioning from: $provisionUrl")
-                fetchAndImportConfig(provisionUrl)
+                binding.pbWaiting.show()
+                lifecycleScope.launch(Dispatchers.IO) {
+                    val success = fetchAndImportConfig(provisionUrl)
+                    if (success) {
+                        saveLastWorkingProvisionUrl(provisionUrl)
+                    }
+                    withContext(Dispatchers.Main) {
+                        binding.pbWaiting.hide()
+                    }
+                }
             } else {
                 Log.w(AppConfig.TAG, "VseMoiOnline: Magic link missing 'url' parameter")
             }
@@ -228,7 +268,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
      * Stored in SharedPreferences to identify this device across sessions
      */
     private fun getOrCreateDeviceId(): String {
-        val prefs = getSharedPreferences("vsemoionline_prefs", MODE_PRIVATE)
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         var deviceId = prefs.getString("device_id", null)
 
         if (deviceId == null) {
@@ -243,50 +283,254 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     }
 
     /**
-     * VseMoiOnline: Fetch VLESS config from backend and import it
-     * Downloads config from URL with device_id parameter appended
+     * VseMoiOnline: Save last successful provisioning URL
+     * This URL will be tried first on next provisioning attempt
      */
-    private fun fetchAndImportConfig(baseUrl: String) {
+    private fun saveLastWorkingProvisionUrl(url: String) {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        prefs.edit().putString(PREF_LAST_WORKING_URL, url).apply()
+        Log.i(AppConfig.TAG, "VseMoiOnline: Saved last working provisioning URL: $url")
+    }
+
+    /**
+     * VseMoiOnline: Get last successful provisioning URL
+     * Returns null if no URL was previously saved
+     */
+    private fun getLastWorkingProvisionUrl(): String? {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        return prefs.getString(PREF_LAST_WORKING_URL, null)
+    }
+
+    /**
+     * VseMoiOnline: Check if update check is needed
+     * Returns true if more than UPDATE_CHECK_INTERVAL_MS has passed since last check
+     */
+    private fun shouldCheckForUpdates(): Boolean {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val lastCheck = prefs.getLong(PREF_LAST_UPDATE_CHECK, 0)
+        val now = System.currentTimeMillis()
+        return (now - lastCheck) > UPDATE_CHECK_INTERVAL_MS
+    }
+
+    /**
+     * VseMoiOnline: Update last check timestamp
+     */
+    private fun updateLastCheckTime() {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        prefs.edit().putLong(PREF_LAST_UPDATE_CHECK, System.currentTimeMillis()).apply()
+    }
+
+    /**
+     * VseMoiOnline: Check for provisioning URL updates via VPN connection
+     * This is called when VPN is connected to allow the server to push new provisioning URLs
+     * Scenario: Provisioning domain is blocked, but VPN server is still working
+     */
+    private fun checkForProvisioningUpdates() {
+        // Only check if enough time has passed since last check
+        if (!shouldCheckForUpdates()) {
+            Log.i(AppConfig.TAG, "VseMoiOnline: Skipping update check, too soon since last check")
+            return
+        }
+
+        Log.i(AppConfig.TAG, "VseMoiOnline: Checking for provisioning URL updates via VPN")
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val url = java.net.URL(VPN_STATUS_ENDPOINT)
+                val connection = url.openConnection() as java.net.HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 5000 // 5 second timeout
+                connection.readTimeout = 5000
+
+                val responseCode = connection.responseCode
+                if (responseCode == java.net.HttpURLConnection.HTTP_OK) {
+                    val responseText = connection.inputStream.bufferedReader().readText()
+                    connection.disconnect()
+
+                    // Parse JSON response
+                    val json = org.json.JSONObject(responseText)
+                    val newProvisionUrl = json.getString("provisioning_url")
+
+                    val currentUrl = getLastWorkingProvisionUrl()
+
+                    if (newProvisionUrl != currentUrl) {
+                        // New provisioning URL detected, save it
+                        saveLastWorkingProvisionUrl(newProvisionUrl)
+                        Log.i(AppConfig.TAG, "VseMoiOnline: Updated provisioning URL to: $newProvisionUrl")
+                    } else {
+                        Log.i(AppConfig.TAG, "VseMoiOnline: Provisioning URL unchanged")
+                    }
+
+                    // Update last check time
+                    updateLastCheckTime()
+                } else {
+                    connection.disconnect()
+                    Log.w(AppConfig.TAG, "VseMoiOnline: Failed to check for updates, HTTP $responseCode")
+                }
+            } catch (e: Exception) {
+                Log.w(AppConfig.TAG, "VseMoiOnline: Failed to check for provisioning updates: ${e.message}")
+                // Don't update last check time on failure, will retry sooner
+            }
+        }
+    }
+
+    /**
+     * VseMoiOnline: Try provisioning with fallback URLs
+     * Priority order:
+     * 1. Last working URL (if exists)
+     * 2. Primary hardcoded URL
+     * 3. Fallback platform URLs (which return the current provisioning endpoint)
+     */
+    private fun tryProvisioningWithFallback() {
+        // Prevent duplicate provisioning attempts
+        if (isProvisioningInProgress) {
+            Log.i(AppConfig.TAG, "VseMoiOnline: Provisioning already in progress, skipping")
+            return
+        }
+
+        isProvisioningInProgress = true
         binding.pbWaiting.show()
 
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val deviceId = getOrCreateDeviceId()
-                val separator = if (baseUrl.contains("?")) "&" else "?"
-                val fullUrl = "$baseUrl${separator}device_id=$deviceId"
+                val urlsToTry = mutableListOf<Pair<String, Boolean>>()
 
-                Log.i(AppConfig.TAG, "VseMoiOnline: Fetching config from: $fullUrl")
-
-                // Download VLESS URI from backend
-                val url = java.net.URL(fullUrl)
-                val connection = url.openConnection() as java.net.HttpURLConnection
-                connection.requestMethod = "GET"
-                connection.connectTimeout = 10000
-                connection.readTimeout = 10000
-
-                val responseCode = connection.responseCode
-                if (responseCode == java.net.HttpURLConnection.HTTP_OK) {
-                    val vlessUri = connection.inputStream.bufferedReader().readText().trim()
-                    Log.i(AppConfig.TAG, "VseMoiOnline: Received config, importing...")
-
-                    withContext(Dispatchers.Main) {
-                        // Import the VLESS URI using existing v2rayNG functionality
-                        importBatchConfig(vlessUri)
-                        toast(R.string.toast_success)
-                    }
-                } else {
-                    throw Exception("HTTP error: $responseCode")
+                // Priority 1: Last working URL
+                getLastWorkingProvisionUrl()?.let {
+                    urlsToTry.add(it to true) // true = direct provisioning URL
+                    Log.i(AppConfig.TAG, "VseMoiOnline: Will try last working URL first: $it")
                 }
+
+                // Priority 2: Primary URL
+                urlsToTry.add(PRIMARY_PROVISION_URL to true)
+
+                // Priority 3: Fallback platforms
+                FALLBACK_PLATFORM_URLS.forEach { platformUrl ->
+                    urlsToTry.add(platformUrl to false) // false = platform URL, needs fetching
+                }
+
+                var success = false
+                for ((url, isDirect) in urlsToTry) {
+                    if (success) break
+
+                    try {
+                        Log.i(AppConfig.TAG, "VseMoiOnline: Attempting provisioning from: $url")
+
+                        val provisionUrl = if (isDirect) {
+                            url
+                        } else {
+                            // Fetch the actual provisioning endpoint from the platform
+                            fetchProvisioningEndpoint(url)
+                        }
+
+                        if (provisionUrl != null) {
+                            val result = fetchAndImportConfig(provisionUrl)
+                            if (result) {
+                                success = true
+                                saveLastWorkingProvisionUrl(provisionUrl)
+                                Log.i(AppConfig.TAG, "VseMoiOnline: Provisioning succeeded from: $url")
+                                break
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.w(AppConfig.TAG, "VseMoiOnline: Failed to provision from $url: ${e.message}")
+                        // Continue to next URL
+                    }
+                }
+
+                withContext(Dispatchers.Main) {
+                    if (!success) {
+                        Log.e(AppConfig.TAG, "VseMoiOnline: All provisioning URLs failed")
+                        toastError("Unable to connect to provisioning service. Please check your internet connection.")
+                    }
+                    binding.pbWaiting.hide()
+                }
+            } finally {
+                // Always clear the flag, even if an exception occurred
+                isProvisioningInProgress = false
+            }
+        }
+    }
+
+    /**
+     * VseMoiOnline: Fetch provisioning endpoint from a platform URL
+     * Platform URLs return plain text like "103.241.67.124:8888" or "provision.example.com"
+     * This method constructs the full provisioning URL from that response
+     */
+    private fun fetchProvisioningEndpoint(platformUrl: String): String? {
+        return try {
+            val url = java.net.URL(platformUrl)
+            val connection = url.openConnection() as java.net.HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.connectTimeout = PROVISION_TIMEOUT_MS
+            connection.readTimeout = PROVISION_TIMEOUT_MS
+
+            val responseCode = connection.responseCode
+            if (responseCode == java.net.HttpURLConnection.HTTP_OK) {
+                val endpointText = connection.inputStream.bufferedReader().readText().trim()
+                connection.disconnect()
+
+                // Construct full provisioning URL
+                // If response contains "http://" or "https://", use as-is
+                // Otherwise, assume it's "host:port" or "domain" and construct URL
+                if (endpointText.startsWith("http://") || endpointText.startsWith("https://")) {
+                    endpointText
+                } else {
+                    // Assume HTTP for now; will migrate to HTTPS with real domains
+                    "http://$endpointText/provision"
+                }
+            } else {
+                connection.disconnect()
+                null
+            }
+        } catch (e: Exception) {
+            Log.w(AppConfig.TAG, "VseMoiOnline: Failed to fetch from platform $platformUrl: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * VseMoiOnline: Fetch VLESS config from backend and import it
+     * Downloads config from URL with device_id parameter appended
+     * Returns true if successful, false otherwise
+     */
+    private suspend fun fetchAndImportConfig(baseUrl: String): Boolean {
+        return try {
+            val deviceId = getOrCreateDeviceId()
+            val separator = if (baseUrl.contains("?")) "&" else "?"
+            val fullUrl = "$baseUrl${separator}device_id=$deviceId"
+
+            Log.i(AppConfig.TAG, "VseMoiOnline: Fetching config from: $fullUrl")
+
+            // Download VLESS URI from backend
+            val url = java.net.URL(fullUrl)
+            val connection = url.openConnection() as java.net.HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.connectTimeout = PROVISION_TIMEOUT_MS
+            connection.readTimeout = PROVISION_TIMEOUT_MS
+
+            val responseCode = connection.responseCode
+            if (responseCode == java.net.HttpURLConnection.HTTP_OK) {
+                val vlessUri = connection.inputStream.bufferedReader().readText().trim()
+                Log.i(AppConfig.TAG, "VseMoiOnline: Received config, importing...")
 
                 connection.disconnect()
 
-            } catch (e: Exception) {
-                Log.e(AppConfig.TAG, "VseMoiOnline: Failed to fetch config", e)
+                // Import the VLESS URI using existing v2rayNG functionality
                 withContext(Dispatchers.Main) {
-                    toastError("Failed to provision: ${e.message}")
-                    binding.pbWaiting.hide()
+                    importBatchConfig(vlessUri)
+                    toast(R.string.toast_success)
                 }
+                true
+            } else {
+                connection.disconnect()
+                Log.w(AppConfig.TAG, "VseMoiOnline: HTTP error: $responseCode")
+                false
             }
+
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "VseMoiOnline: Failed to fetch config from $baseUrl", e)
+            false
         }
     }
 
@@ -309,6 +553,9 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
                 binding.fab.contentDescription = getString(R.string.action_stop_service)
                 setTestState(getString(R.string.connection_connected))
                 binding.layoutTest.isFocusable = true
+
+                // VseMoiOnline: Check for provisioning URL updates when VPN connects
+                checkForProvisioningUpdates()
             } else {
                 binding.fab.setImageResource(R.drawable.ic_play_24dp)
                 binding.fab.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.color_fab_inactive))
@@ -373,17 +620,14 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     /**
      * VseMoiOnline: Auto-provision if no servers configured
      * Retries on every resume until successful
+     * Uses fallback URLs if primary provisioning endpoint is unavailable
      */
     private fun checkAndAutoProvision() {
         // Check if there are any servers configured
         val serverList = MmkvManager.decodeServerList()
         if (serverList.isEmpty()) {
-            Log.i(AppConfig.TAG, "VseMoiOnline: No servers configured, attempting auto-provisioning")
-
-            // Trigger provisioning from default backend URL
-            // Will keep trying on every onResume() until a server is successfully added
-            val defaultBackendUrl = "http://103.241.67.124:8888/provision"
-            fetchAndImportConfig(defaultBackendUrl)
+            Log.i(AppConfig.TAG, "VseMoiOnline: No servers configured, attempting auto-provisioning with fallback")
+            tryProvisioningWithFallback()
         }
     }
 
