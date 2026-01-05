@@ -324,6 +324,7 @@
     <string name="connection_test_testing_count">Testing %d configurations…</string>
     <string name="connection_test_available">Success: Connection took %dms</string>
     <string name="connection_test_error">Fail to detect internet connection: %s</string>
+    <string name="vpn_connection_name">Turn VPN On/Off</string>
     <string name="connection_test_fail">Internet Unavailable</string>
     <string name="connection_test_error_status_code">Error code: #%d</string>
     <string name="connection_connected">Connected, tap to check connection</string>

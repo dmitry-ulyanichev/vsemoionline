@@ -5,44 +5,25 @@
 
     <group android:id="@+id/group_main">
         <item
-            android:id="@+id/sub_setting"
-            android:icon="@drawable/ic_subscriptions_24dp"
-            android:title="@string/title_sub_setting" />
-        <item
             android:id="@+id/per_app_proxy_settings"
             android:icon="@drawable/ic_per_apps_24dp"
             android:title="@string/per_app_proxy_settings" />
         <item
-            android:id="@+id/routing_setting"
-            android:icon="@drawable/ic_routing_24dp"
-            android:title="@string/routing_settings_title" />
+            android:id="@+id/source_code"
+            android:icon="@drawable/ic_source_code_24dp"
+            android:title="@string/title_source_code" />
         <item
-            android:id="@+id/user_asset_setting"
-            android:icon="@drawable/ic_file_24dp"
-            android:title="@string/title_user_asset_setting" />
+            android:id="@+id/oss_licenses"
+            android:icon="@drawable/license_24px"
+            android:title="@string/title_oss_license" />
         <item
-            android:id="@+id/settings"
-            android:icon="@drawable/ic_settings_24dp"
-            android:title="@string/title_settings" />
-    </group>
-
-    <group android:id="@+id/group_id2">
+            android:id="@+id/tg_channel"
+            android:icon="@drawable/ic_telegram_24dp"
+            android:title="@string/title_tg_channel" />
         <item
-            android:id="@+id/promotion"
-            android:icon="@drawable/ic_promotion_24dp"
-            android:title="@string/title_pref_promotion" />
-        <item
-            android:id="@+id/logcat"
-            android:icon="@drawable/ic_logcat_24dp"
-            android:title="@string/title_logcat" />
-        <item
-            android:id="@+id/check_for_update"
-            android:icon="@drawable/ic_check_update_24dp"
-            android:title="@string/update_check_for_update" />
-        <item
-            android:id="@+id/about"
-            android:icon="@drawable/ic_about_24dp"
-            android:title="@string/title_about" />
+            android:id="@+id/privacy_policy"
+            android:icon="@drawable/ic_privacy_24dp"
+            android:title="@string/title_privacy_policy" />
         <!-- place holder for version text at the bottom -->
         <item
             android:id="@+id/placeholder"

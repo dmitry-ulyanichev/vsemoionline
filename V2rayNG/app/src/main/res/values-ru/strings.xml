@@ -320,6 +320,7 @@
     <string name="connection_test_testing_count">Проверка профилей (%d)</string>
     <string name="connection_test_available">Успешно: соединение заняло %d мс</string>
     <string name="connection_test_error">Сбой проверки интернет-соединения: %s</string>
+    <string name="vpn_connection_name">Вкл./Выкл. VPN</string>
     <string name="connection_test_fail">Интернет недоступен</string>
     <string name="connection_test_error_status_code">Код ошибки: #%d</string>
     <string name="connection_connected">Подключено, нажмите для проверки</string>

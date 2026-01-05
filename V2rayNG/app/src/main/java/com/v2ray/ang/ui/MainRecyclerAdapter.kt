@@ -61,8 +61,8 @@ class MainRecyclerAdapter(val activity: MainActivity) : RecyclerView.Adapter<Mai
 
             holder.itemView.setBackgroundColor(Color.TRANSPARENT)
 
-            //Name address
-            holder.itemMainBinding.tvName.text = profile.remarks
+            //Name address - use localized string for display
+            holder.itemMainBinding.tvName.text = mActivity.getString(R.string.vpn_connection_name)
             holder.itemMainBinding.tvStatistics.text = getAddress(profile)
             holder.itemMainBinding.tvType.text = profile.configType.name
 
@@ -123,6 +123,38 @@ class MainRecyclerAdapter(val activity: MainActivity) : RecyclerView.Adapter<Mai
 
             holder.itemMainBinding.infoContainer.setOnClickListener {
                 setSelectServer(guid)
+            }
+
+            // Setup switch for VPN connection
+            val isSelected = guid == MmkvManager.getSelectServer()
+            holder.itemMainBinding.switchConnection.isChecked = isRunning && isSelected
+
+            // Only enable switch for selected server
+            holder.itemMainBinding.switchConnection.isEnabled = isSelected
+
+            // Handle switch toggle without triggering recursion
+            holder.itemMainBinding.switchConnection.setOnCheckedChangeListener(null)
+            holder.itemMainBinding.switchConnection.setOnCheckedChangeListener { _, isChecked ->
+                if (!isSelected) return@setOnCheckedChangeListener
+
+                if (isChecked) {
+                    // Start VPN
+                    if ((MmkvManager.decodeSettingsString(AppConfig.PREF_MODE) ?: AppConfig.VPN) == AppConfig.VPN) {
+                        val intent = android.net.VpnService.prepare(mActivity)
+                        if (intent == null) {
+                            mActivity.startV2Ray()
+                        } else {
+                            // Need VPN permission - revert switch and show permission dialog
+                            holder.itemMainBinding.switchConnection.isChecked = false
+                            mActivity.requestVpnPermission.launch(intent)
+                        }
+                    } else {
+                        mActivity.startV2Ray()
+                    }
+                } else {
+                    // Stop VPN
+                    V2RayServiceManager.stopVService(mActivity)
+                }
             }
         }
 //        if (holder is FooterViewHolder) {

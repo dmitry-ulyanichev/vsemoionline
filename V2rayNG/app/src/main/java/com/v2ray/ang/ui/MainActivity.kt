@@ -18,7 +18,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.ActionBarDrawerToggle
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.widget.SearchView
 import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
 import androidx.core.view.isVisible
@@ -37,6 +36,7 @@ import com.v2ray.ang.extension.toastError
 import com.v2ray.ang.handler.AngConfigManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.helper.SimpleItemTouchHelperCallback
+import com.v2ray.ang.handler.SpeedtestManager
 import com.v2ray.ang.handler.V2RayServiceManager
 import com.v2ray.ang.util.Utils
 import com.v2ray.ang.viewmodel.MainViewModel
@@ -51,7 +51,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     }
 
     private val adapter by lazy { MainRecyclerAdapter(this) }
-    private val requestVpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+    internal val requestVpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (it.resultCode == RESULT_OK) {
             startV2Ray()
         }
@@ -170,6 +170,10 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         binding.drawerLayout.addDrawerListener(toggle)
         toggle.syncState()
         binding.navView.setNavigationItemSelectedListener(this)
+
+        // Set version in navigation header
+        binding.navView.getHeaderView(0)?.findViewById<android.widget.TextView>(R.id.tv_version_header)?.text =
+            "v${com.v2ray.ang.BuildConfig.VERSION_NAME} (${SpeedtestManager.getLibVersion()})"
 
         initGroupTab()
         setupViewModel()
@@ -298,6 +302,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         mainViewModel.updateTestResultAction.observe(this) { setTestState(it) }
         mainViewModel.isRunning.observe(this) { isRunning ->
             adapter.isRunning = isRunning
+            adapter.notifyDataSetChanged()  // Refresh adapter to update switch states
             if (isRunning) {
                 binding.fab.setImageResource(R.drawable.ic_stop_24dp)
                 binding.fab.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.color_fab_active))
@@ -339,7 +344,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         binding.tabGroup.isVisible = true
     }
 
-    private fun startV2Ray() {
+    internal fun startV2Ray() {
         if (MmkvManager.getSelectServer().isNullOrEmpty()) {
             toast(R.string.title_file_chooser)
             return
@@ -388,135 +393,14 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_main, menu)
-
-        val searchItem = menu.findItem(R.id.search_view)
-        if (searchItem != null) {
-            val searchView = searchItem.actionView as SearchView
-            searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
-                override fun onQueryTextSubmit(query: String?): Boolean = false
-
-                override fun onQueryTextChange(newText: String?): Boolean {
-                    mainViewModel.filterConfig(newText.orEmpty())
-                    return false
-                }
-            })
-
-            searchView.setOnCloseListener {
-                mainViewModel.filterConfig("")
-                false
-            }
-        }
         return super.onCreateOptionsMenu(menu)
     }
 
     override fun onOptionsItemSelected(item: MenuItem) = when (item.itemId) {
-        R.id.import_qrcode -> {
-            importQRcode()
-            true
-        }
-
-        R.id.import_clipboard -> {
-            importClipboard()
-            true
-        }
-
-        R.id.import_local -> {
-            importConfigLocal()
-            true
-        }
-
-        R.id.import_manually_policy_group -> {
-            importManually(EConfigType.POLICYGROUP.value)
-            true
-        }
-
-        R.id.import_manually_vmess -> {
-            importManually(EConfigType.VMESS.value)
-            true
-        }
-
-        R.id.import_manually_vless -> {
-            importManually(EConfigType.VLESS.value)
-            true
-        }
-
-        R.id.import_manually_ss -> {
-            importManually(EConfigType.SHADOWSOCKS.value)
-            true
-        }
-
-        R.id.import_manually_socks -> {
-            importManually(EConfigType.SOCKS.value)
-            true
-        }
-
-        R.id.import_manually_http -> {
-            importManually(EConfigType.HTTP.value)
-            true
-        }
-
-        R.id.import_manually_trojan -> {
-            importManually(EConfigType.TROJAN.value)
-            true
-        }
-
-        R.id.import_manually_wireguard -> {
-            importManually(EConfigType.WIREGUARD.value)
-            true
-        }
-
-        R.id.import_manually_hysteria2 -> {
-            importManually(EConfigType.HYSTERIA2.value)
-            true
-        }
-
-        R.id.export_all -> {
-            exportAll()
-            true
-        }
-
-        R.id.ping_all -> {
-            toast(getString(R.string.connection_test_testing_count, mainViewModel.serversCache.count()))
-            mainViewModel.testAllTcping()
-            true
-        }
-
-        R.id.real_ping_all -> {
-            toast(getString(R.string.connection_test_testing_count, mainViewModel.serversCache.count()))
-            mainViewModel.testAllRealPing()
-            true
-        }
-
         R.id.service_restart -> {
             restartV2Ray()
             true
         }
-
-        R.id.del_all_config -> {
-            delAllConfig()
-            true
-        }
-
-        R.id.del_duplicate_config -> {
-            delDuplicateConfig()
-            true
-        }
-
-        R.id.del_invalid_config -> {
-            delInvalidConfig()
-            true
-        }
-
-        R.id.sort_by_test_results -> {
-            sortByTestResults()
-            true
-        }
-
-        R.id.sub_update -> {
-            importConfigViaSub()
-            true
-        }
-
 
         else -> super.onOptionsItemSelected(item)
     }
@@ -784,19 +668,19 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     override fun onNavigationItemSelected(item: MenuItem): Boolean {
         // Handle navigation view item clicks here.
         when (item.itemId) {
-            R.id.sub_setting -> requestSubSettingActivity.launch(Intent(this, SubSettingActivity::class.java))
             R.id.per_app_proxy_settings -> startActivity(Intent(this, PerAppProxyActivity::class.java))
-            R.id.routing_setting -> requestSubSettingActivity.launch(Intent(this, RoutingSettingActivity::class.java))
-            R.id.user_asset_setting -> startActivity(Intent(this, UserAssetActivity::class.java))
-            R.id.settings -> startActivity(
-                Intent(this, SettingsActivity::class.java)
-                    .putExtra("isRunning", mainViewModel.isRunning.value == true)
-            )
-
-            R.id.promotion -> Utils.openUri(this, "${Utils.decode(AppConfig.APP_PROMOTION_URL)}?t=${System.currentTimeMillis()}")
-            R.id.logcat -> startActivity(Intent(this, LogcatActivity::class.java))
-            R.id.check_for_update -> startActivity(Intent(this, CheckUpdateActivity::class.java))
-            R.id.about -> startActivity(Intent(this, AboutActivity::class.java))
+            R.id.source_code -> Utils.openUri(this, AppConfig.APP_URL)
+            R.id.oss_licenses -> {
+                val webView = android.webkit.WebView(this)
+                webView.loadUrl("file:///android_asset/open_source_licenses.html")
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("Open source licenses")
+                    .setView(webView)
+                    .setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
+                    .show()
+            }
+            R.id.tg_channel -> Utils.openUri(this, AppConfig.TG_CHANNEL_URL)
+            R.id.privacy_policy -> Utils.openUri(this, AppConfig.APP_PRIVACY_POLICY)
         }
 
         binding.drawerLayout.closeDrawer(GravityCompat.START)

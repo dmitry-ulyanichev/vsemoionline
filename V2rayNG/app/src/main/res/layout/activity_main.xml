@@ -107,6 +107,7 @@
                         android:focusable="true"
                         android:nextFocusLeft="@+id/layout_test"
                         android:src="@drawable/ic_play_24dp"
+                        android:visibility="gone"
                         app:layout_anchorGravity="bottom|right|end" />
 
                 </FrameLayout>
