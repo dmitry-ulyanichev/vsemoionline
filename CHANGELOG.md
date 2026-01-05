@@ -4,6 +4,94 @@ All notable changes to VseMoiOnline will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.0] - 2026-01-04
+
+### Added
+- **Custom branding with launcher icons**
+  - Custom app icon with foreground and background layers (`ic_launcher_foreground.png`, `ic_launcher_background.png`)
+  - Icons deployed to all density folders (mdpi, hdpi, xhdpi, xxhdpi, xxxhdpi)
+  - Adaptive icons properly configured for Android 8.0+
+
+- **WireGuard-style inline VPN toggle**
+  - Material Design toggle switch added directly in connection item layout
+  - One-tap VPN control without floating action button
+  - Switch state automatically syncs with VPN status
+  - Fixed toggle state update issue after VPN permission grant
+
+- **Localized connection display name**
+  - English: "Turn VPN On/Off"
+  - Russian: "Вкл./Выкл. VPN"
+  - User-friendly instruction instead of technical name
+
+- **Per-app proxy settings**
+  - Restored to navigation drawer for banking app exclusions
+  - Allows users to bypass VPN for specific apps (e.g., SberbankOnline)
+
+- **Navigation drawer enhancements**
+  - App version info displayed in header below app name
+  - Direct access to Source code, Open source licenses, Telegram channel, Privacy policy
+  - Removed redundant "About" screen - all items moved to main menu
+
+### Changed
+- **App name for F-Droid variant**
+  - Changed from "v2rayNG (F-Droid)" to "Все Мои Онлайн"
+  - Displays as "VseMoiOnline" on device home screen
+
+- **Simplified connection list UI**
+  - Removed technical details (IP address, port, protocol type)
+  - Removed subscription indicator and statistics
+  - Removed ping test results display
+  - Removed action buttons (share, edit, delete, more options)
+  - Clean single-line display with just connection name and toggle
+
+- **Streamlined main toolbar**
+  - Removed search/filter icon
+  - Removed add config icon and submenu
+  - Removed three-dot overflow menu
+  - **Only** refresh icon (service restart) remains for troubleshooting
+
+- **Minimized navigation drawer**
+  - Removed: Subscription settings, Routing settings, User asset settings, General settings, Promotion, Logcat, Check for updates
+  - Kept: Per-app proxy settings, Source code, Licenses, Telegram, Privacy policy
+
+### Removed
+- **From About screen**
+  - Backup configuration feature
+  - Share configuration feature
+  - Restore configuration feature
+  - Feedback feature
+  - Entire About activity now bypassed - items moved to navigation drawer
+
+- **From connection test results**
+  - Country code display (security: prevents IP disclosure)
+  - Server IP address display (security: prevents accidental sharing)
+  - Only shows: "Success: Connection took Xms"
+
+- **Floating action button (FAB)**
+  - Hidden completely (`android:visibility="gone"`)
+  - Replaced by inline toggle switches
+
+### Fixed
+- **Toggle switch state synchronization**
+  - Switch now immediately updates to ON after granting VPN permission
+  - Added `adapter.notifyDataSetChanged()` call in `isRunning` observer
+  - Eliminates need to leave/return to app to see correct state
+
+### Technical Details
+- **Modified files**: 36 files changed
+- **Code reduction**: 773 deletions, 162 additions (net -611 lines)
+- **Layouts simplified**: `item_recycler_main.xml` reduced from 224 to 96 lines
+- **Navigation cleaned**: `menu_drawer.xml` and `menu_main.xml` streamlined
+- **Adapter enhanced**: WireGuard-style toggle logic in `MainRecyclerAdapter.kt`
+- **String resources**: Localization support for English and Russian
+
+### User Experience
+- **Zero-configuration VPN** for non-technical users
+- **One-tap connect/disconnect** with visual toggle
+- **No confusing technical information** displayed
+- **Banking app compatibility** via per-app proxy settings
+- **Clean, minimal interface** focused on essential functions
+
 ## [1.0.0] - 2026-01-02
 
 ### Added

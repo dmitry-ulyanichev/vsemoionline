@@ -2,17 +2,50 @@
 
 **Project**: VseMoiOnline (v2rayNG Fork)
 
-This document contains detailed technical information for developers working on VseMoiOnline. For user-facing documentation, see README.md. For change history, see V2RAY_CHANGELOG.md.
+This document contains detailed technical information for developers working on VseMoiOnline. For user-facing documentation, see README.md. For change history, see CHANGELOG.md.
 
 ---
 
-## Android Client Implementation
+## Recent Updates (2026-01-04)
 
-### Modified Files
+### UI/UX Redesign for Non-Technical Users
+
+**Objective**: Transform v2rayNG into a simple, one-tap VPN solution suitable for family members with no technical knowledge.
+
+**Key Changes**:
+1. Custom branding with app-specific icons
+2. WireGuard-style inline toggle switches
+3. Removed all technical information from UI
+4. Streamlined navigation to essential features only
+5. Localized connection names for better UX
+
+### Modified Files (UI Redesign)
+- `V2rayNG/app/src/fdroid/res/values/strings.xml` - App name
+- `V2rayNG/app/src/main/res/values/strings.xml` - Connection name strings
+- `V2rayNG/app/src/main/res/values-ru/strings.xml` - Russian translations
+- `V2rayNG/app/src/main/res/layout/item_recycler_main.xml` - Connection list item
+- `V2rayNG/app/src/main/res/layout/nav_header.xml` - Navigation header
+- `V2rayNG/app/src/main/res/layout/activity_main.xml` - Main activity (FAB hidden)
+- `V2rayNG/app/src/main/res/layout/activity_about.xml` - About screen (gutted)
+- `V2rayNG/app/src/main/res/menu/menu_drawer.xml` - Navigation menu
+- `V2rayNG/app/src/main/res/menu/menu_main.xml` - Toolbar menu
+- `V2rayNG/app/src/main/res/mipmap-*/ic_launcher*.png` - Custom icons (all densities)
+- `V2rayNG/app/src/main/res/mipmap-anydpi-v26/ic_launcher*.xml` - Adaptive icons
+- `V2rayNG/app/src/main/res/drawable/ic_refresh_24dp.xml` - Refresh icon (new)
+- `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt` - Navigation handlers
+- `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainRecyclerAdapter.kt` - Toggle logic
+- `V2rayNG/app/src/main/java/com/v2ray/ang/ui/AboutActivity.kt` - Simplified
+- `V2rayNG/app/src/main/java/com/v2ray/ang/handler/V2RayServiceManager.kt` - Test result
+
+### Modified Files (Auto-Provisioning - 2026-01-02)
 - `V2rayNG/app/build.gradle.kts`
 - `V2rayNG/app/src/main/AndroidManifest.xml`
 - `V2rayNG/app/src/main/res/values/strings.xml`
 - `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`
+
+---
+
+## Android Client Implementation
 
 ### Application Identity
 **File**: `app/build.gradle.kts:8-12`
@@ -112,6 +145,213 @@ val defaultBackendUrl = "http://103.241.67.124:8888/provision"
 - ✅ Network error → Retries on next app resume
 - ✅ Config import fails → Retries on next app resume
 - ✅ Success → Stops trying (server list no longer empty)
+
+---
+
+## UI/UX Redesign Implementation Details (2026-01-04)
+
+### Custom Launcher Icons
+
+**Files Modified**: All `mipmap-*/ic_launcher*.png` files
+
+Replaced v2rayNG icons with custom VseMoiOnline branding:
+- **Foreground**: `/icons/ic_launcher_foreground.png` (192x192px)
+- **Background**: `/icons/ic_launcher_background.png` (192x192px)
+- Deployed to all density folders: mdpi, hdpi, xhdpi, xxhdpi, xxxhdpi
+
+**Adaptive Icon Configuration**:
+```xml
+<!-- ic_launcher.xml -->
+<adaptive-icon>
+    <background android:drawable="@mipmap/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>
+```
+
+Changed from color-based background to image-based for proper layering.
+
+### WireGuard-Style Toggle Switch
+
+**File**: `MainRecyclerAdapter.kt:128-159`
+
+Added inline toggle functionality:
+```kotlin
+// Setup switch for VPN connection
+val isSelected = guid == MmkvManager.getSelectServer()
+holder.itemMainBinding.switchConnection.isChecked = isRunning && isSelected
+holder.itemMainBinding.switchConnection.isEnabled = isSelected
+
+holder.itemMainBinding.switchConnection.setOnCheckedChangeListener { _, isChecked ->
+    if (isChecked) {
+        // Start VPN with permission check
+        if (VpnService.prepare() == null) {
+            mActivity.startV2Ray()
+        } else {
+            // Request permission, revert switch
+            holder.itemMainBinding.switchConnection.isChecked = false
+            mActivity.requestVpnPermission.launch(intent)
+        }
+    } else {
+        // Stop VPN
+        V2RayServiceManager.stopVService(mActivity)
+    }
+}
+```
+
+**Layout**: `item_recycler_main.xml:38-42`
+```xml
+<com.google.android.material.switchmaterial.SwitchMaterial
+    android:id="@+id/switch_connection"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginEnd="@dimen/padding_spacing_dp8" />
+```
+
+**Bug Fix**: Toggle state synchronization
+```kotlin
+// MainActivity.kt:305
+mainViewModel.isRunning.observe(this) { isRunning ->
+    adapter.isRunning = isRunning
+    adapter.notifyDataSetChanged()  // Critical: refresh switch states
+    // ... rest of FAB logic
+}
+```
+
+Without `notifyDataSetChanged()`, switch stays OFF after VPN permission grant until app resume.
+
+### Localized Connection Names
+
+**Implementation**: Replace profile.remarks with localized string
+
+**Adapter**: `MainRecyclerAdapter.kt:65`
+```kotlin
+holder.itemMainBinding.tvName.text = mActivity.getString(R.string.vpn_connection_name)
+```
+
+**String Resources**:
+```xml
+<!-- values/strings.xml -->
+<string name="vpn_connection_name">Turn VPN On/Off</string>
+
+<!-- values-ru/strings.xml -->
+<string name="vpn_connection_name">Вкл./Выкл. VPN</string>
+```
+
+Automatically uses device language. Actual connection name ("VseMoiOnline") remains in database for backend compatibility.
+
+### Simplified Connection List UI
+
+**File**: `item_recycler_main.xml`
+
+Reduced from 224 lines to 96 lines by:
+1. Removing nested layouts for statistics, type, test results
+2. Hiding action buttons (share, edit, delete, more) with `visibility="gone"`
+3. Keeping IDs to prevent adapter crashes but setting dimensions to 0dp
+4. Clean single-line layout: `[indicator] [name] [toggle]`
+
+**Result**: Clean, minimal display suitable for non-technical users.
+
+### Navigation Drawer Cleanup
+
+**Menu**: `menu_drawer.xml`
+
+Removed 8 items, kept 5:
+```xml
+<group android:id="@+id/group_main">
+    <item android:id="@+id/per_app_proxy_settings" />  <!-- Essential for banking apps -->
+    <item android:id="@+id/source_code" />
+    <item android:id="@+id/oss_licenses" />
+    <item android:id="@+id/tg_channel" />
+    <item android:id="@+id/privacy_policy" />
+    <item android:id="@+id/placeholder" />  <!-- Version display -->
+</group>
+```
+
+**Version Display**: `nav_header.xml:20-27`
+```xml
+<TextView
+    android:id="@+id/tv_version_header"
+    android:textAppearance="@style/TextAppearance.AppCompat.Small"
+    android:textColor="?android:attr/textColorSecondary" />
+```
+
+**Population**: `MainActivity.kt:163-165`
+```kotlin
+binding.navView.getHeaderView(0)?.findViewById<TextView>(R.id.tv_version_header)?.text =
+    "v${BuildConfig.VERSION_NAME} (${SpeedtestManager.getLibVersion()})"
+```
+
+### Toolbar Simplification
+
+**Menu**: `menu_main.xml`
+
+Reduced from 100+ lines to 9 lines:
+```xml
+<menu>
+    <item
+        android:id="@+id/service_restart"
+        android:icon="@drawable/ic_refresh_24dp"
+        android:title="@string/title_service_restart"
+        app:showAsAction="always" />
+</menu>
+```
+
+Only service restart button remains for troubleshooting stuck connections.
+
+### About Screen Gutted
+
+**Strategy**: Move all useful items to navigation drawer, bypass About activity
+
+**AboutActivity.kt**: Removed 179 lines
+- Deleted backup/restore/share functionality
+- Deleted permission launchers
+- Deleted file chooser logic
+- Kept only version display (now redundant)
+
+**Navigation Handler**: `MainActivity.kt:670-682`
+```kotlin
+when (item.itemId) {
+    R.id.per_app_proxy_settings -> startActivity(Intent(this, PerAppProxyActivity::class.java))
+    R.id.source_code -> Utils.openUri(this, AppConfig.APP_URL)
+    R.id.oss_licenses -> {
+        val webView = WebView(this)
+        webView.loadUrl("file:///android_asset/open_source_licenses.html")
+        AlertDialog.Builder(this).setView(webView).show()
+    }
+    R.id.tg_channel -> Utils.openUri(this, AppConfig.TG_CHANNEL_URL)
+    R.id.privacy_policy -> Utils.openUri(this, AppConfig.APP_PRIVACY_POLICY)
+}
+```
+
+### Security Enhancement: Connection Test Results
+
+**File**: `V2RayServiceManager.kt:255-260`
+
+**Removed**:
+```kotlin
+// OLD: Exposed server IP and country
+SpeedtestManager.getRemoteIPInfo()?.let { ip ->
+    MessageUtil.sendMsg2UI(service, MSG_MEASURE_DELAY_SUCCESS, "$result\n$ip")
+}
+```
+
+**Result**: Only shows `"Success: Connection took 12ms"` without IP/country.
+
+**Rationale**: Prevents non-technical users from accidentally sharing server IP in screenshots, reducing risk of censorship.
+
+### Floating Action Button (FAB)
+
+**File**: `activity_main.xml:110`
+
+```xml
+<FloatingActionButton
+    android:id="@+id/fab"
+    android:visibility="gone"  <!-- Hidden -->
+    ... />
+```
+
+Replaced by inline toggle switches. FAB update logic remains for future compatibility but button is invisible.
 
 ---
 
