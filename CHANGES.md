@@ -6,6 +6,177 @@ This document contains detailed technical information for developers working on 
 
 ---
 
+## Recent Updates (2026-01-05)
+
+### Censorship-Resistant Provisioning System
+
+**Objective**: Enable clients to automatically provision VPN configs even when primary provisioning domain is blocked by censors. Implement multi-tier fallback mechanism and VPN-based update push system.
+
+**Threat Model**:
+- DNS/IP blocking of provisioning domain
+- DNS/IP blocking of VPN server
+- Both provisioning and VPN server blocked simultaneously
+
+**Key Changes**:
+
+#### 1. Multi-Tier Fallback System
+- **Last working URL** (Priority 1): Client tries previously successful URL first
+- **Primary URL** (Priority 2): Hardcoded provisioning endpoint
+- **Platform URLs** (Priority 3): GitHub Gists, Cloudflare Workers, Vercel, etc.
+- Each attempt has 8-second timeout for fast failover
+- Sequential retry stops at first success
+
+#### 2. VPN-Based Update Push
+- Client checks `/api/status` endpoint when VPN connects
+- Server returns current provisioning URL via JSON response
+- 24-hour rate limit to reduce server load (configurable)
+- Enables migration when provisioning blocked but VPN works
+
+#### 3. Duplicate Prevention
+- Added `isProvisioningInProgress` flag
+- Prevents race conditions when `onResume()` called multiple times
+- Ensures only one provisioning attempt runs at a time
+
+### Modified Files (Censorship Resistance - 2026-01-05)
+- `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt` - Fallback logic, VPN updates
+- `v2ray-backend/config.py` - Environment variable support for provisioning URL
+- `v2ray-backend/vless_backend.py` - `/api/status` endpoint
+
+### Implementation Details
+
+#### Client-Side Fallback System
+**File**: `MainActivity.kt:56-80`
+
+Added companion object constants for fallback configuration:
+```kotlin
+companion object {
+    private const val PREFS_NAME = "vsemoionline_prefs"
+    private const val PREF_LAST_WORKING_URL = "last_working_provisioning_url"
+    private const val PREF_LAST_UPDATE_CHECK = "last_update_check_time"
+    private const val PROVISION_TIMEOUT_MS = 8000 // 8 seconds per attempt
+    private const val UPDATE_CHECK_INTERVAL_MS = 60 * 1000L // 1 minute for testing
+
+    private const val PRIMARY_PROVISION_URL = "http://203.241.67.124:8888/provision"
+    private const val VPN_STATUS_ENDPOINT = "http://103.241.67.124:8888/api/status"
+
+    private val FALLBACK_PLATFORM_URLS = listOf(
+        "https://gist.githubusercontent.com/.../endpoint.txt"
+        // GitHub, Cloudflare Workers, Vercel, etc.
+    )
+}
+```
+
+#### Fallback Logic Implementation
+**File**: `MainActivity.kt:377-453`
+
+The `tryProvisioningWithFallback()` method:
+1. Checks `isProvisioningInProgress` flag to prevent duplicates
+2. Builds URL list in priority order (last working → primary → platforms)
+3. Iterates through URLs sequentially with 8-second timeout each
+4. For platform URLs, calls `fetchProvisioningEndpoint()` to get actual URL
+5. Calls `fetchAndImportConfig()` for each URL until success
+6. Saves successful URL using `saveLastWorkingProvisionUrl()`
+7. Clears flag in `finally` block to ensure cleanup
+
+**Platform URL Resolution**:
+Platform URLs return plain text like:
+- `103.241.67.124:8888` (IP:port format)
+- `provision.example.com` (domain format)
+- `https://provision.example.com/provision` (full URL)
+
+The client constructs the full provisioning URL from this response.
+
+#### VPN-Based Update System
+**File**: `MainActivity.kt:323-375`
+
+The `checkForProvisioningUpdates()` method:
+1. Called automatically when VPN connects (line 558)
+2. Checks if 24 hours passed using `shouldCheckForUpdates()`
+3. Queries `/api/status` endpoint through VPN tunnel
+4. Parses JSON response to extract `provisioning_url`
+5. Compares with saved URL, updates if different
+6. Updates last check timestamp to prevent excessive polling
+
+**Trigger Point**:
+```kotlin
+mainViewModel.isRunning.observe(this) { isRunning ->
+    if (isRunning) {
+        // VPN connected
+        checkForProvisioningUpdates()
+    }
+}
+```
+
+#### Duplicate Prevention
+**File**: `MainActivity.kt:103, 307-311`
+
+Added instance variable:
+```kotlin
+private var isProvisioningInProgress = false
+```
+
+Used in `tryProvisioningWithFallback()`:
+```kotlin
+if (isProvisioningInProgress) {
+    Log.i(AppConfig.TAG, "Provisioning already in progress, skipping")
+    return
+}
+isProvisioningInProgress = true
+try {
+    // ... provisioning logic ...
+} finally {
+    isProvisioningInProgress = false
+}
+```
+
+#### Server-Side API Endpoint
+**File**: `v2ray-backend/vless_backend.py:333-351`
+
+Added `/api/status` endpoint:
+```python
+@app.get("/api/status")
+async def status_endpoint():
+    """
+    Status endpoint for VPN-connected clients to check for provisioning URL updates
+    """
+    from datetime import datetime
+
+    return {
+        "provisioning_url": CURRENT_PROVISION_URL,
+        "updated_at": datetime.utcnow().isoformat() + "Z",
+        "status": "ok"
+    }
+```
+
+**Configuration Update**:
+File: `v2ray-backend/config.py:10-15`
+```python
+CURRENT_PROVISION_URL = os.getenv(
+    "PROVISION_URL",
+    f"http://{HOST_IP}:{BACKEND_PORT}/provision"
+)
+```
+
+Allows updating via:
+```bash
+export PROVISION_URL="https://new-provision.com/provision"
+systemctl restart vsemoionline-backend
+```
+
+### Censorship Resistance Coverage
+
+| Scenario | Primary | Last URL | Platforms | VPN Updates | Magic Link |
+|----------|---------|----------|-----------|-------------|------------|
+| Normal ops | ✅ | ✅ | ➖ | ➖ | ➖ |
+| Primary blocked | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Provision blocked, VPN works | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Both blocked | ❌ | ❌ | ✅ | ❌ | ✅ |
+| All infrastructure blocked | ❌ | ❌ | ❌ | ❌ | ✅ |
+
+**Magic Link** (`vsemoionline://import?url=...`) remains the ultimate fallback, distributable via email or messaging apps.
+
+---
+
 ## Recent Updates (2026-01-04)
 
 ### UI/UX Redesign for Non-Technical Users
