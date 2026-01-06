@@ -1,5 +1,8 @@
+/icons
 /v2ray-backend
+/provisioning-update-backend
 .claude
+
 # Ignore data and key store files
 *.dat
 *.jks

@@ -56,15 +56,10 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     companion object {
         private const val PREFS_NAME = "vsemoionline_prefs"
         private const val PREF_LAST_WORKING_URL = "last_working_provisioning_url"
-        private const val PREF_LAST_UPDATE_CHECK = "last_update_check_time"
         private const val PROVISION_TIMEOUT_MS = 8000 // 8 seconds per attempt
-        private const val UPDATE_CHECK_INTERVAL_MS = 60 * 1000L // 6 hours = 6 * 60 * 60 * 1000L
 
         // Primary provisioning URL (will be replaced with domain + HTTPS in production)
-        private const val PRIMARY_PROVISION_URL = "http://203.241.67.124:8888/provision"
-
-        // VPN server status endpoint (accessed through active VPN connection)
-        private const val VPN_STATUS_ENDPOINT = "http://103.241.67.124:8888/api/status"
+        private const val PRIMARY_PROVISION_URL = "http://103.241.67.124:8888/provision"
 
         // Fallback platform URLs - return plain text with current provisioning domain/IP
         private val FALLBACK_PLATFORM_URLS = listOf(
@@ -302,79 +297,6 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     }
 
     /**
-     * VseMoiOnline: Check if update check is needed
-     * Returns true if more than UPDATE_CHECK_INTERVAL_MS has passed since last check
-     */
-    private fun shouldCheckForUpdates(): Boolean {
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        val lastCheck = prefs.getLong(PREF_LAST_UPDATE_CHECK, 0)
-        val now = System.currentTimeMillis()
-        return (now - lastCheck) > UPDATE_CHECK_INTERVAL_MS
-    }
-
-    /**
-     * VseMoiOnline: Update last check timestamp
-     */
-    private fun updateLastCheckTime() {
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        prefs.edit().putLong(PREF_LAST_UPDATE_CHECK, System.currentTimeMillis()).apply()
-    }
-
-    /**
-     * VseMoiOnline: Check for provisioning URL updates via VPN connection
-     * This is called when VPN is connected to allow the server to push new provisioning URLs
-     * Scenario: Provisioning domain is blocked, but VPN server is still working
-     */
-    private fun checkForProvisioningUpdates() {
-        // Only check if enough time has passed since last check
-        if (!shouldCheckForUpdates()) {
-            Log.i(AppConfig.TAG, "VseMoiOnline: Skipping update check, too soon since last check")
-            return
-        }
-
-        Log.i(AppConfig.TAG, "VseMoiOnline: Checking for provisioning URL updates via VPN")
-
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                val url = java.net.URL(VPN_STATUS_ENDPOINT)
-                val connection = url.openConnection() as java.net.HttpURLConnection
-                connection.requestMethod = "GET"
-                connection.connectTimeout = 5000 // 5 second timeout
-                connection.readTimeout = 5000
-
-                val responseCode = connection.responseCode
-                if (responseCode == java.net.HttpURLConnection.HTTP_OK) {
-                    val responseText = connection.inputStream.bufferedReader().readText()
-                    connection.disconnect()
-
-                    // Parse JSON response
-                    val json = org.json.JSONObject(responseText)
-                    val newProvisionUrl = json.getString("provisioning_url")
-
-                    val currentUrl = getLastWorkingProvisionUrl()
-
-                    if (newProvisionUrl != currentUrl) {
-                        // New provisioning URL detected, save it
-                        saveLastWorkingProvisionUrl(newProvisionUrl)
-                        Log.i(AppConfig.TAG, "VseMoiOnline: Updated provisioning URL to: $newProvisionUrl")
-                    } else {
-                        Log.i(AppConfig.TAG, "VseMoiOnline: Provisioning URL unchanged")
-                    }
-
-                    // Update last check time
-                    updateLastCheckTime()
-                } else {
-                    connection.disconnect()
-                    Log.w(AppConfig.TAG, "VseMoiOnline: Failed to check for updates, HTTP $responseCode")
-                }
-            } catch (e: Exception) {
-                Log.w(AppConfig.TAG, "VseMoiOnline: Failed to check for provisioning updates: ${e.message}")
-                // Don't update last check time on failure, will retry sooner
-            }
-        }
-    }
-
-    /**
      * VseMoiOnline: Try provisioning with fallback URLs
      * Priority order:
      * 1. Last working URL (if exists)
@@ -553,9 +475,6 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
                 binding.fab.contentDescription = getString(R.string.action_stop_service)
                 setTestState(getString(R.string.connection_connected))
                 binding.layoutTest.isFocusable = true
-
-                // VseMoiOnline: Check for provisioning URL updates when VPN connects
-                checkForProvisioningUpdates()
             } else {
                 binding.fab.setImageResource(R.drawable.ic_play_24dp)
                 binding.fab.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.color_fab_inactive))
