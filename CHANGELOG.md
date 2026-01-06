@@ -14,12 +14,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Support for GitHub Gists, Cloudflare Workers, Vercel, Netlify, and more
   - 8-second timeout per provisioning attempt for faster failover
 
-- **VPN-based provisioning URL updates**
-  - Automatic check for new provisioning URLs when VPN connects
-  - Server-side `/api/status` endpoint for pushing URL updates to connected clients
-  - 24-hour check interval to reduce server load (configurable to 6 hours)
-  - Enables seamless migration when provisioning domain is blocked but VPN works
-
 - **Duplicate provisioning prevention**
   - Added flag to prevent simultaneous provisioning attempts
   - Fixes issue where multiple server configs were created on first launch
@@ -32,18 +26,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Continues to next URL on failure instead of giving up
   - User-friendly error message when all provisioning URLs fail
 
+### Security
+- **Architecture decision: No VPN-based push updates**
+  - Initially implemented VPN status API for pushing provisioning URL updates
+  - Removed for security reasons after analysis of high-adversary threat model
+  - Exposing additional ports creates discoverable infrastructure
+  - Status API enables information leakage and traffic analysis
+  - Final architecture relies on distributed platform URLs and local persistence
+
 ### Technical Details
 - **Client-side** (MainActivity.kt):
   - Added `isProvisioningInProgress` flag to prevent race conditions
-  - Added `checkForProvisioningUpdates()` method called on VPN connect
   - Added `tryProvisioningWithFallback()` with multi-tier URL priority
   - Added `fetchProvisioningEndpoint()` to fetch current endpoint from platform URLs
   - Changed `fetchAndImportConfig()` to return boolean for success/failure tracking
-
-- **Server-side** (v2ray-backend):
-  - Added `CURRENT_PROVISION_URL` in config.py with environment variable support
-  - Added `/api/status` endpoint returning current provisioning URL and timestamp
-  - Allows updating provisioning URL via `export PROVISION_URL=...` without code changes
 
 ### Infrastructure
 - **Fallback URL priority order**:
@@ -51,10 +47,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   2. Primary hardcoded URL
   3. Platform-hosted URLs (GitHub Gist, Cloudflare Workers, etc.)
 
-- **VPN-based updates**:
-  - Queries server status endpoint through active VPN tunnel
-  - Updates saved provisioning URL if server reports new endpoint
-  - Handles scenario where provisioning is blocked but VPN still works
+- **Censorship resistance strategy**:
+  - Distributed fallback system makes it harder to block all provisioning sources
+  - Magic links (`vsemoionline://import?url=...`) as ultimate fallback
+  - No exposed ports on VPN server beyond necessary VPN traffic
+  - Minimal attack surface for infrastructure discovery
 
 ## [1.1.0] - 2026-01-04
 
