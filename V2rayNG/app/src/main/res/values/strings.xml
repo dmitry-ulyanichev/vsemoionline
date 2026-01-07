@@ -405,4 +405,8 @@
 
     <string name="pre_resolving_domain">Pre-resolving domain…</string>
 
+    <!-- VseMoiOnline: Provisioning messages -->
+    <string name="provisioning_retry_message">Still trying to connect you, please wait...</string>
+    <string name="provisioning_failed_message">Unable to connect to provisioning service. Please check your internet connection.</string>
+
 </resources>

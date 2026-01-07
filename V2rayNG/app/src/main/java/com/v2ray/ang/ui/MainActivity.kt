@@ -56,7 +56,10 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     companion object {
         private const val PREFS_NAME = "vsemoionline_prefs"
         private const val PREF_LAST_WORKING_URL = "last_working_provisioning_url"
-        private const val PROVISION_TIMEOUT_MS = 8000 // 8 seconds per attempt
+
+        // Two-cycle provisioning timeouts for better UX
+        private const val PROVISION_TIMEOUT_QUICK_MS = 3000  // 3 seconds - Cycle 1: quick scan
+        private const val PROVISION_TIMEOUT_PATIENT_MS = 10000 // 10 seconds - Cycle 2: patient retry
 
         // Primary provisioning URL (will be replaced with domain + HTTPS in production)
         private const val PRIMARY_PROVISION_URL = "http://103.241.67.124:8888/provision"
@@ -244,7 +247,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
                 Log.i(AppConfig.TAG, "VseMoiOnline: Magic link detected, provisioning from: $provisionUrl")
                 binding.pbWaiting.show()
                 lifecycleScope.launch(Dispatchers.IO) {
-                    val success = fetchAndImportConfig(provisionUrl)
+                    val success = fetchAndImportConfig(provisionUrl, PROVISION_TIMEOUT_PATIENT_MS)
                     if (success) {
                         saveLastWorkingProvisionUrl(provisionUrl)
                     }
@@ -297,7 +300,15 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     }
 
     /**
-     * VseMoiOnline: Try provisioning with fallback URLs
+     * VseMoiOnline: Try provisioning with fallback URLs using two-cycle approach
+     *
+     * Cycle 1 (Quick scan - 3s timeout):
+     *   - Tries all URLs quickly to find working endpoints fast
+     *
+     * Cycle 2 (Patient retry - 10s timeout):
+     *   - Only retries URLs that timed out in Cycle 1
+     *   - Shows user-friendly message to maintain patience
+     *
      * Priority order:
      * 1. Last working URL (if exists)
      * 2. Primary hardcoded URL
@@ -331,39 +342,82 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
                     urlsToTry.add(platformUrl to false) // false = platform URL, needs fetching
                 }
 
+                // CYCLE 1: Quick scan with 3s timeout
+                Log.i(AppConfig.TAG, "VseMoiOnline: Starting Cycle 1 - quick scan (${PROVISION_TIMEOUT_QUICK_MS}ms timeout)")
                 var success = false
+                val timedOutUrls = mutableListOf<Pair<String, Boolean>>()
+
                 for ((url, isDirect) in urlsToTry) {
                     if (success) break
 
                     try {
-                        Log.i(AppConfig.TAG, "VseMoiOnline: Attempting provisioning from: $url")
+                        Log.i(AppConfig.TAG, "VseMoiOnline: Cycle 1 - Attempting provisioning from: $url")
 
                         val provisionUrl = if (isDirect) {
                             url
                         } else {
                             // Fetch the actual provisioning endpoint from the platform
-                            fetchProvisioningEndpoint(url)
+                            fetchProvisioningEndpoint(url, PROVISION_TIMEOUT_QUICK_MS)
                         }
 
                         if (provisionUrl != null) {
-                            val result = fetchAndImportConfig(provisionUrl)
+                            val result = fetchAndImportConfig(provisionUrl, PROVISION_TIMEOUT_QUICK_MS)
                             if (result) {
                                 success = true
                                 saveLastWorkingProvisionUrl(provisionUrl)
-                                Log.i(AppConfig.TAG, "VseMoiOnline: Provisioning succeeded from: $url")
+                                Log.i(AppConfig.TAG, "VseMoiOnline: Cycle 1 - Provisioning succeeded from: $url")
                                 break
                             }
                         }
+                    } catch (e: java.net.SocketTimeoutException) {
+                        Log.w(AppConfig.TAG, "VseMoiOnline: Cycle 1 - Timeout from $url, will retry in Cycle 2")
+                        timedOutUrls.add(url to isDirect)
                     } catch (e: Exception) {
-                        Log.w(AppConfig.TAG, "VseMoiOnline: Failed to provision from $url: ${e.message}")
-                        // Continue to next URL
+                        Log.w(AppConfig.TAG, "VseMoiOnline: Cycle 1 - Failed from $url: ${e.message}")
+                        // Don't retry non-timeout errors (HTTP errors, etc.)
+                    }
+                }
+
+                // CYCLE 2: Patient retry for timed-out URLs only
+                if (!success && timedOutUrls.isNotEmpty()) {
+                    // Show encouraging message to user
+                    withContext(Dispatchers.Main) {
+                        toast(R.string.provisioning_retry_message)
+                    }
+
+                    Log.i(AppConfig.TAG, "VseMoiOnline: Starting Cycle 2 - patient retry (${PROVISION_TIMEOUT_PATIENT_MS}ms timeout) for ${timedOutUrls.size} URLs")
+
+                    for ((url, isDirect) in timedOutUrls) {
+                        if (success) break
+
+                        try {
+                            Log.i(AppConfig.TAG, "VseMoiOnline: Cycle 2 - Retrying provisioning from: $url")
+
+                            val provisionUrl = if (isDirect) {
+                                url
+                            } else {
+                                fetchProvisioningEndpoint(url, PROVISION_TIMEOUT_PATIENT_MS)
+                            }
+
+                            if (provisionUrl != null) {
+                                val result = fetchAndImportConfig(provisionUrl, PROVISION_TIMEOUT_PATIENT_MS)
+                                if (result) {
+                                    success = true
+                                    saveLastWorkingProvisionUrl(provisionUrl)
+                                    Log.i(AppConfig.TAG, "VseMoiOnline: Cycle 2 - Provisioning succeeded from: $url")
+                                    break
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.w(AppConfig.TAG, "VseMoiOnline: Cycle 2 - Failed from $url: ${e.message}")
+                        }
                     }
                 }
 
                 withContext(Dispatchers.Main) {
                     if (!success) {
-                        Log.e(AppConfig.TAG, "VseMoiOnline: All provisioning URLs failed")
-                        toastError("Unable to connect to provisioning service. Please check your internet connection.")
+                        Log.e(AppConfig.TAG, "VseMoiOnline: All provisioning URLs failed after both cycles")
+                        toastError(R.string.provisioning_failed_message)
                     }
                     binding.pbWaiting.hide()
                 }
@@ -378,14 +432,17 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
      * VseMoiOnline: Fetch provisioning endpoint from a platform URL
      * Platform URLs return plain text like "103.241.67.124:8888" or "provision.example.com"
      * This method constructs the full provisioning URL from that response
+     *
+     * @param platformUrl The platform URL to fetch from
+     * @param timeoutMs Timeout in milliseconds for this request
      */
-    private fun fetchProvisioningEndpoint(platformUrl: String): String? {
+    private fun fetchProvisioningEndpoint(platformUrl: String, timeoutMs: Int): String? {
         return try {
             val url = java.net.URL(platformUrl)
             val connection = url.openConnection() as java.net.HttpURLConnection
             connection.requestMethod = "GET"
-            connection.connectTimeout = PROVISION_TIMEOUT_MS
-            connection.readTimeout = PROVISION_TIMEOUT_MS
+            connection.connectTimeout = timeoutMs
+            connection.readTimeout = timeoutMs
 
             val responseCode = connection.responseCode
             if (responseCode == java.net.HttpURLConnection.HTTP_OK) {
@@ -407,16 +464,19 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
             }
         } catch (e: Exception) {
             Log.w(AppConfig.TAG, "VseMoiOnline: Failed to fetch from platform $platformUrl: ${e.message}")
-            null
+            throw e // Re-throw to allow timeout detection
         }
     }
 
     /**
      * VseMoiOnline: Fetch VLESS config from backend and import it
      * Downloads config from URL with device_id parameter appended
-     * Returns true if successful, false otherwise
+     *
+     * @param baseUrl The provisioning URL to fetch from
+     * @param timeoutMs Timeout in milliseconds for this request
+     * @return true if successful, false otherwise
      */
-    private suspend fun fetchAndImportConfig(baseUrl: String): Boolean {
+    private suspend fun fetchAndImportConfig(baseUrl: String, timeoutMs: Int): Boolean {
         return try {
             val deviceId = getOrCreateDeviceId()
             val separator = if (baseUrl.contains("?")) "&" else "?"
@@ -428,8 +488,8 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
             val url = java.net.URL(fullUrl)
             val connection = url.openConnection() as java.net.HttpURLConnection
             connection.requestMethod = "GET"
-            connection.connectTimeout = PROVISION_TIMEOUT_MS
-            connection.readTimeout = PROVISION_TIMEOUT_MS
+            connection.connectTimeout = timeoutMs
+            connection.readTimeout = timeoutMs
 
             val responseCode = connection.responseCode
             if (responseCode == java.net.HttpURLConnection.HTTP_OK) {
@@ -452,7 +512,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
 
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "VseMoiOnline: Failed to fetch config from $baseUrl", e)
-            false
+            throw e // Re-throw to allow timeout detection
         }
     }
 
