@@ -4,6 +4,21 @@ All notable changes to VseMoiOnline will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Changed
+- **Two-cycle provisioning for improved UX**
+  - Cycle 1: Quick scan with 3-second timeout tries all URLs rapidly
+  - Cycle 2: Patient retry with 10-second timeout for timed-out URLs only
+  - User-friendly toast "Still trying to connect you, please wait..." shown between cycles
+  - Improved perceived responsiveness: working endpoints found in 3s instead of 8s
+  - Only timeout errors trigger Cycle 2 retry (HTTP errors are skipped)
+
+- **Localized provisioning messages**
+  - Added `provisioning_retry_message` string resource (English + Russian)
+  - Added `provisioning_failed_message` string resource (English + Russian)
+  - Messages automatically display in user's device language
+
 ## [1.2.0] - 2026-01-05
 
 ### Added

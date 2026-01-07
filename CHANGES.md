@@ -6,6 +6,114 @@ This document contains detailed technical information for developers working on 
 
 ---
 
+## Recent Updates (2026-01-07)
+
+### Two-Cycle Provisioning for Improved UX
+
+**Objective**: Reduce perceived wait time during provisioning while maintaining robustness for slow/unreliable connections.
+
+**Problem**: Single 8-second timeout per URL caused poor UX:
+- Working endpoints took 8s to respond even if available in 2s
+- Multiple blocked endpoints resulted in 24+ second hangs with no feedback
+- App appeared frozen to non-technical users
+
+**Solution**: Two-cycle provisioning strategy with differential timeouts.
+
+**Key Changes**:
+
+#### 1. Two-Cycle Timeout Strategy
+- **Cycle 1 (Quick scan)**: 3-second timeout per URL
+  - Tries all URLs sequentially
+  - Catches fast-responding endpoints quickly
+  - Distinguishes between timeouts and HTTP errors
+  - Only timeouts added to retry list
+
+- **Cycle 2 (Patient retry)**: 10-second timeout per URL
+  - Only retries URLs that timed out in Cycle 1
+  - Skips URLs that returned HTTP errors (non-recoverable)
+  - Shows user-friendly toast before starting: "Still trying to connect you, please wait..."
+  - Provides more time for genuinely slow but functional connections
+
+#### 2. Timeout Constants
+**File**: `MainActivity.kt:60-62`
+
+```kotlin
+// Two-cycle provisioning timeouts for better UX
+private const val PROVISION_TIMEOUT_QUICK_MS = 3000   // Cycle 1: quick scan
+private const val PROVISION_TIMEOUT_PATIENT_MS = 10000 // Cycle 2: patient retry
+```
+
+Replaced single `PROVISION_TIMEOUT_MS = 8000`.
+
+#### 3. Enhanced Error Handling
+**File**: `MainActivity.kt:345-415`
+
+Modified `tryProvisioningWithFallback()` to:
+- Catch `SocketTimeoutException` specifically in Cycle 1
+- Track timed-out URLs separately from HTTP errors
+- Re-throw exceptions from helper methods for proper timeout detection
+- Show localized toast message between cycles
+
+#### 4. Parameterized Helper Methods
+**Files**:
+- `fetchProvisioningEndpoint(platformUrl: String, timeoutMs: Int)` - line 439
+- `fetchAndImportConfig(baseUrl: String, timeoutMs: Int)` - line 479
+
+Both methods now accept `timeoutMs` parameter and re-throw exceptions to enable timeout detection in caller.
+
+#### 5. Localized User Feedback
+**Files**:
+- `res/values/strings.xml:409-410`
+- `res/values-ru/strings.xml:403-404`
+
+Added string resources:
+```xml
+<!-- English -->
+<string name="provisioning_retry_message">Still trying to connect you, please wait...</string>
+<string name="provisioning_failed_message">Unable to connect to provisioning service. Please check your internet connection.</string>
+
+<!-- Russian -->
+<string name="provisioning_retry_message">Всё ещё пытаемся подключиться, пожалуйста, подождите...</string>
+<string name="provisioning_failed_message">Не удалось подключиться к серверу. Пожалуйста, проверьте подключение к интернету.</string>
+```
+
+### Performance Characteristics
+
+**Best case** (working endpoint responds quickly):
+- **Before**: 8 seconds (waited full timeout)
+- **After**: 2-3 seconds (actual response time)
+
+**One URL blocked** (timeout), others work:
+- **Before**: 8s + 2s = 10 seconds
+- **After**: 3s + 2s = 5 seconds
+
+**All URLs blocked** (all timeout):
+- **Before**: 3 URLs × 8s = 24 seconds (no feedback)
+- **After**:
+  - Cycle 1: 3 URLs × 3s = 9 seconds
+  - Toast: "Still trying to connect you, please wait..."
+  - Cycle 2: 3 URLs × 10s = 30 seconds
+  - **Total**: ~40 seconds with user feedback
+
+**HTTP errors** (401, 404, 500):
+- **Before**: Failed immediately, no retry
+- **After**: Same behavior (not retried in Cycle 2)
+
+### User Experience Improvements
+
+1. **Faster success path**: Working endpoints found in ~3s vs 8s
+2. **Visual feedback**: Toast message prevents "app is frozen" perception
+3. **Localized messages**: Automatic language selection for Russian users
+4. **Intelligent retry**: Only timeouts retried, not permanent HTTP errors
+5. **Bounded worst case**: Still completes within ~40s even if all URLs timeout
+
+### Modified Files (Two-Cycle Provisioning - 2026-01-07)
+- `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt` - Two-cycle logic
+- `V2rayNG/app/src/main/res/values/strings.xml` - English messages
+- `V2rayNG/app/src/main/res/values-ru/strings.xml` - Russian translations
+
+---
+
 ## Recent Updates (2026-01-05)
 
 ### Censorship-Resistant Provisioning System
