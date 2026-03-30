@@ -40,13 +40,65 @@ The following files have been modified from the upstream v2rayNG project:
 ### 4. `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`
 - **Upstream**: https://github.com/2dust/v2rayNG/blob/master/V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
 - **Changes**:
-  - Added `onNewIntent()` method (lines 200-204)
-  - Added `handleMagicLink()` method (lines 210-220)
-  - Added `getOrCreateDeviceId()` method (lines 226-239)
-  - Added `fetchAndImportConfig()` method (lines 245-287)
-  - Added `checkAndAutoProvision()` method (lines 372-393)
-  - Modified `onCreate()` to call `handleMagicLink(intent)` (line 197)
-  - Modified `onResume()` to call `checkAndAutoProvision()` (line 365)
+  - Added `onNewIntent()` method
+  - Added `handleMagicLink()` method — dispatches `vsemoionline://import` and `vsemoionline://activate` deep links
+  - Added `handleActivateDeepLink()` method — POSTs activation token, re-provisions on success, restarts VPN tunnel if running
+  - Added `getOrCreateDeviceId()` method
+  - Added `fetchAndImportConfig()` method
+  - Added `checkAndAutoProvision()` method — cleans up stale configs if more than one server found in MMKV
+  - Added `tryProvisioningWithFallback()` method — two-cycle provisioning with multi-tier URL fallback
+  - Added `fetchProvisioningEndpoint()` method
+  - Added `saveLastWorkingProvisionUrl()` / `getLastWorkingProvisionUrl()` methods
+  - Added `saveProvisionData()` method
+  - Added `startStatusPolling()` / `stopStatusPolling()` / `pollStatus()` methods
+  - Modified `onCreate()` to call `handleMagicLink(intent)`
+  - Modified `onResume()` to call `checkAndAutoProvision()`
+  - Added subscription UI methods: `setupVsmUi`, `setupCodeFields`, `handleCodePaste`, `checkSubmitEnabled`, `submitActivationCode`, `toggleSubBlock`, `openCabinetUrl`, `onServerRowTapped`, `updateSubscriptionHeader`, `startBlinking`, `updateServerRow`, `updateSubBlock`, `trafficRingColor`, `formatGb`
+  - Extended `pollStatus()` to parse and persist days_remaining, traffic_remaining, throttle_mbps
+
+### 5. `V2rayNG/app/src/main/res/values/strings.xml`
+- **Upstream**: https://github.com/2dust/v2rayNG/blob/master/V2rayNG/app/src/main/res/values/strings.xml
+- **Changes**:
+  - Added all VseMoiOnline Russian UI strings (vsm_ prefix); upstream strings untouched
+
+### 6. `V2rayNG/app/src/main/res/values/colors.xml`
+- **Upstream**: https://github.com/2dust/v2rayNG/blob/master/V2rayNG/app/src/main/res/values/colors.xml
+- **Changes**:
+  - Added 20 vsm_ brand colours; upstream colour entries untouched
+
+### 7. `V2rayNG/app/src/main/res/values-night/colors.xml`
+- **Upstream**: https://github.com/2dust/v2rayNG/blob/master/V2rayNG/app/src/main/res/values-night/colors.xml
+- **Changes**:
+  - Added 10 vsm_ dark-mode colour overrides; upstream entries untouched
+
+### 8. `V2rayNG/app/src/main/res/values/themes.xml`
+- **Upstream**: https://github.com/2dust/v2rayNG/blob/master/V2rayNG/app/src/main/res/values/themes.xml
+- **Changes**:
+  - Changed `AppThemeDayNight` parent from `Theme.AppCompat.DayNight` to `Theme.MaterialComponents.DayNight`
+  - Changed `colorPrimary` to `vsm_link` (#1565C0); `colorPrimaryDark` and `statusBarColor` to `vsm_toolbar`
+
+### 9. `V2rayNG/app/src/main/res/values-night/themes.xml`
+- **Upstream**: https://github.com/2dust/v2rayNG/blob/master/V2rayNG/app/src/main/res/values-night/themes.xml
+- **Changes**:
+  - Same theme parent and colour changes as `values/themes.xml`
+
+### 10. `V2rayNG/app/src/main/res/menu/menu_main.xml`
+- **Upstream**: https://github.com/2dust/v2rayNG/blob/master/V2rayNG/app/src/main/res/menu/menu_main.xml
+- **Changes**:
+  - Changed `service_restart` item `showAsAction` from `always` to `never` (moves reload icon to overflow menu)
+
+### 11. `V2rayNG/app/src/main/res/layout/activity_main.xml`
+- **Upstream**: https://github.com/2dust/v2rayNG/blob/master/V2rayNG/app/src/main/res/layout/activity_main.xml
+- **Changes**:
+  - Full restructure for VseMoiOnline subscription UI; original view IDs preserved for binding compatibility
+
+### 12. `V2rayNG/app/src/main/java/com/v2ray/ang/ui/DonutChartView.kt` *(new file)*
+- No upstream equivalent
+- Custom canvas-drawn donut ring for traffic and speed visualisation
+
+### 13. `V2rayNG/app/src/main/res/drawable/code_field_bg.xml` *(new file)*
+- No upstream equivalent
+- Selector drawable for 8-field activation code input
 
 ## Attribution Requirements
 

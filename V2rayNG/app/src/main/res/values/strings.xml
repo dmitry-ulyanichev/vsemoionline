@@ -409,4 +409,57 @@
     <string name="provisioning_retry_message">Still trying to connect you, please wait...</string>
     <string name="provisioning_failed_message">Unable to connect to provisioning service. Please check your internet connection.</string>
 
+    <!-- VseMoiOnline: Subscription row -->
+    <string name="vsm_toolbar_title">Все Мои Онлайн</string>
+    <string name="vsm_sub_label">Подписка:</string>
+    <string name="vsm_sub_free">Бесплатно</string>
+    <string name="vsm_cabinet_link">Личный кабинет →</string>
+
+    <!-- VseMoiOnline: Server row -->
+    <string name="vsm_server_label">Сервер</string>
+
+    <!-- VseMoiOnline: Sub-management block -->
+    <string name="vsm_sub_block_title">УПРАВЛЕНИЕ ПОДПИСКОЙ</string>
+    <string name="vsm_chart_remaining">Осталось</string>
+    <string name="vsm_chart_speed">Скорость</string>
+    <string name="vsm_traffic_of_format">из %d ГБ</string>
+    <string name="vsm_speed_of_format">из %d Mbps</string>
+
+    <!-- VseMoiOnline: Comparison table (free user) -->
+    <string name="vsm_cmp_col_free">Бесплатно</string>
+    <string name="vsm_cmp_col_paid">Платно</string>
+    <string name="vsm_cmp_row_speed">Скорость</string>
+    <string name="vsm_cmp_row_traffic">Трафик</string>
+    <string name="vsm_cmp_row_servers">Серверы</string>
+    <string name="vsm_cmp_free_speed">2–3 Mbps</string>
+    <string name="vsm_cmp_paid_speed">25 Mbps</string>
+    <string name="vsm_cmp_free_traffic">25 ГБ</string>
+    <string name="vsm_cmp_paid_traffic">250 ГБ</string>
+    <string name="vsm_cmp_free_servers">авто</string>
+    <string name="vsm_cmp_paid_servers">на выбор</string>
+
+    <!-- VseMoiOnline: Buttons -->
+    <string name="vsm_btn_pay">Оплатить подписку</string>
+    <string name="vsm_label_enter_code">Ввести код активации</string>
+    <string name="vsm_code_activated">✓ Код успешно активирован</string>
+    <string name="vsm_btn_family">❤ Подключите родных и близких</string>
+    <string name="vsm_btn_renew">Продлить подписку</string>
+
+    <!-- VseMoiOnline: Activation code input -->
+    <string name="vsm_code_hint">Ввести код активации</string>
+
+    <!-- VseMoiOnline: Server-select dialog (shown to free users) -->
+    <string name="vsm_server_dialog_title">Платная функция</string>
+    <string name="vsm_server_dialog_body">Выбор сервера доступен только для платных пользователей. Оплатите подписку, чтобы выбрать сервер.</string>
+    <string name="vsm_server_dialog_cancel">Отмена</string>
+    <string name="vsm_server_dialog_cta">Оплатить</string>
+
+    <!-- VseMoiOnline: Days remaining (Russian plurals) -->
+    <plurals name="vsm_days_remaining">
+        <item quantity="one">%d день</item>
+        <item quantity="few">%d дня</item>
+        <item quantity="many">%d дней</item>
+        <item quantity="other">%d дней</item>
+    </plurals>
+
 </resources>

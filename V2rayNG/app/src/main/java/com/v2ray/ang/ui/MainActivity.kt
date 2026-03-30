@@ -10,9 +10,17 @@ import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.content.res.Configuration
+import android.text.Editable
+import android.text.InputFilter
+import android.text.TextWatcher
 import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
+import android.view.animation.AlphaAnimation
+import android.view.animation.Animation
+import android.widget.EditText
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -33,6 +41,7 @@ import com.v2ray.ang.databinding.ActivityMainBinding
 import com.v2ray.ang.dto.EConfigType
 import com.v2ray.ang.extension.toast
 import com.v2ray.ang.extension.toastError
+import com.v2ray.ang.extension.toastSuccess
 import com.v2ray.ang.handler.AngConfigManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.helper.SimpleItemTouchHelperCallback
@@ -41,6 +50,7 @@ import com.v2ray.ang.handler.V2RayServiceManager
 import com.v2ray.ang.util.Utils
 import com.v2ray.ang.viewmodel.MainViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -56,13 +66,21 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     companion object {
         private const val PREFS_NAME = "vsemoionline_prefs"
         private const val PREF_LAST_WORKING_URL = "last_working_provisioning_url"
+        private const val PREF_XRAY_UUID = "xray_uuid"
+        private const val PREF_PLAN = "plan"
+        private const val PREF_BACKEND_BASE_URL = "backend_base_url"
+        private const val PREF_VLESS_URI = "vless_uri"
+        private const val PREF_PAID_DAYS_REMAINING = "paid_days_remaining"
+        private const val PREF_TRAFFIC_REMAINING_GB = "traffic_remaining_gb"
+        private const val PREF_TRAFFIC_TOTAL_GB = "traffic_total_gb"
+        private const val PREF_THROTTLE_MBPS = "throttle_mbps"
+        private const val PREF_CABINET_URL = "cabinet_url"
 
         // Two-cycle provisioning timeouts for better UX
         private const val PROVISION_TIMEOUT_QUICK_MS = 3000  // 3 seconds - Cycle 1: quick scan
         private const val PROVISION_TIMEOUT_PATIENT_MS = 10000 // 10 seconds - Cycle 2: patient retry
 
-        // Primary provisioning URL (will be replaced with domain + HTTPS in production)
-        private const val PRIMARY_PROVISION_URL = "http://103.241.67.124:8888/provision"
+        private const val PRIMARY_PROVISION_URL = "https://vmonl.store/provision"
 
         // Fallback platform URLs - return plain text with current provisioning domain/IP
         private val FALLBACK_PLATFORM_URLS = listOf(
@@ -104,6 +122,17 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
 
     // VseMoiOnline: Flag to prevent duplicate provisioning attempts
     private var isProvisioningInProgress = false
+
+    // VseMoiOnline: Set when an activation deep link is being processed.
+    // checkAndAutoProvision skips if this is non-null to avoid a free-provision race.
+    private var pendingActivationToken: String? = null
+
+    // VseMoiOnline: Status polling job — active only while VPN is running
+    private var statusPollingJob: Job? = null
+
+    // VseMoiOnline: Code input fields and paste-in-progress flag
+    private lateinit var codeFields: Array<EditText>
+    private var isPasting = false
 
     // register activity result for requesting permission
     private val requestPermissionLauncher =
@@ -155,7 +184,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        title = getString(R.string.title_server)
+        title = getString(R.string.vsm_toolbar_title)
         setSupportActionBar(binding.toolbar)
 
         binding.fab.setOnClickListener {
@@ -206,6 +235,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
 
         initGroupTab()
         setupViewModel()
+        setupVsmUi()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -237,26 +267,104 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     }
 
     /**
-     * VseMoiOnline: Handle magic link provisioning
-     * Extracts URL from vsemoionline://import?url=... and fetches VLESS config
+     * VseMoiOnline: Handle deep links
+     * vsemoionline://import?url=...    — fetch VLESS config from URL (legacy magic link)
+     * vsemoionline://activate?token=... — activate paid subscription token
      */
     private fun handleMagicLink(intent: Intent?) {
-        if (intent?.data?.scheme == "vsemoionline") {
-            val provisionUrl = intent.data?.getQueryParameter("url")
-            if (provisionUrl != null) {
-                Log.i(AppConfig.TAG, "VseMoiOnline: Magic link detected, provisioning from: $provisionUrl")
+        val data = intent?.data ?: return
+        if (data.scheme != "vsemoionline") return
+
+        when (data.host) {
+            "import" -> {
+                val provisionUrl = data.getQueryParameter("url") ?: run {
+                    Log.w(AppConfig.TAG, "VseMoiOnline: 'import' deep link missing 'url' parameter")
+                    return
+                }
+                Log.i(AppConfig.TAG, "VseMoiOnline: Import deep link — provisioning from: $provisionUrl")
                 binding.pbWaiting.show()
                 lifecycleScope.launch(Dispatchers.IO) {
                     val success = fetchAndImportConfig(provisionUrl, PROVISION_TIMEOUT_PATIENT_MS)
-                    if (success) {
-                        saveLastWorkingProvisionUrl(provisionUrl)
-                    }
+                    if (success) saveLastWorkingProvisionUrl(provisionUrl)
+                    withContext(Dispatchers.Main) { binding.pbWaiting.hide() }
+                }
+            }
+            "activate" -> {
+                val token = data.getQueryParameter("token") ?: run {
+                    Log.w(AppConfig.TAG, "VseMoiOnline: 'activate' deep link missing 'token' parameter")
+                    return
+                }
+                Log.i(AppConfig.TAG, "VseMoiOnline: Activate deep link received")
+                pendingActivationToken = token
+                handleActivateDeepLink(token)
+            }
+            else -> Log.w(AppConfig.TAG, "VseMoiOnline: Unknown deep link host: ${data.host}")
+        }
+    }
+
+    /**
+     * VseMoiOnline: Consume an activation token via POST /activate, then re-provision
+     * to get the paid-inbound VLESS config.
+     */
+    private fun handleActivateDeepLink(token: String) {
+        // On first launch backendBaseUrl may not yet be stored — fall back to primary URL.
+        val backendBaseUrl = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .getString(PREF_BACKEND_BASE_URL, null)
+            ?: PRIMARY_PROVISION_URL.removeSuffix("/provision").trimEnd('/')
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val connection = java.net.URL("$backendBaseUrl/activate").openConnection()
+                    as java.net.HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.doOutput = true
+                connection.connectTimeout = 10_000
+                connection.readTimeout = 10_000
+                connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+                connection.instanceFollowRedirects = false
+                connection.outputStream.use {
+                    it.write("token=${java.net.URLEncoder.encode(token, "UTF-8")}".toByteArray(Charsets.UTF_8))
+                }
+                val responseCode = connection.responseCode
+                connection.disconnect()
+
+                if (responseCode in 301..303) {
+                    // Backend redirects to /activate/success on valid token — re-provision for paid config
+                    val success = fetchAndImportConfig("$backendBaseUrl/provision", PROVISION_TIMEOUT_PATIENT_MS)
                     withContext(Dispatchers.Main) {
-                        binding.pbWaiting.hide()
+                        pendingActivationToken = null
+                        if (success) {
+                            toastSuccess("Подписка активирована!")
+                            binding.tvCodeSuccess.visibility = View.VISIBLE
+                            binding.tvCodeSuccess.postDelayed(
+                                { binding.tvCodeSuccess.visibility = View.GONE }, 3000
+                            )
+                            if (mainViewModel.isRunning.value == true) restartV2Ray()
+                        } else {
+                            toast("Подписка активирована. Перезапустите приложение для обновления конфигурации.")
+                        }
+                    }
+                } else {
+                    // Token rejected — could be genuinely invalid, or user tapped the browser's
+                    // "Continue" chip a second time after a successful activation.
+                    // Check stored plan to avoid a confusing error in the latter case.
+                    val currentPlan = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                        .getString(PREF_PLAN, "free")
+                    withContext(Dispatchers.Main) {
+                        pendingActivationToken = null
+                        if (currentPlan == "paid") {
+                            toastSuccess("Подписка уже активирована!")
+                        } else {
+                            toastError("Код недействителен или уже использован")
+                        }
                     }
                 }
-            } else {
-                Log.w(AppConfig.TAG, "VseMoiOnline: Magic link missing 'url' parameter")
+            } catch (e: Exception) {
+                Log.e(AppConfig.TAG, "VseMoiOnline: Activation error", e)
+                withContext(Dispatchers.Main) {
+                    pendingActivationToken = null
+                    toastError("Ошибка активации. Проверьте подключение к интернету.")
+                }
             }
         }
     }
@@ -297,6 +405,26 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     private fun getLastWorkingProvisionUrl(): String? {
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         return prefs.getString(PREF_LAST_WORKING_URL, null)
+    }
+
+    private fun getAndroidId(): String? {
+        return try {
+            android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ANDROID_ID)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun saveProvisionData(xrayUuid: String, plan: String, vlessUri: String, provisionUrl: String, cabinetUrl: String?) {
+        val baseUrl = provisionUrl.removeSuffix("/provision").trimEnd('/')
+        val editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+            .putString(PREF_XRAY_UUID, xrayUuid)
+            .putString(PREF_PLAN, plan)
+            .putString(PREF_VLESS_URI, vlessUri)
+            .putString(PREF_BACKEND_BASE_URL, baseUrl)
+        if (cabinetUrl != null) editor.putString(PREF_CABINET_URL, cabinetUrl)
+        editor.apply()
+        Log.i(AppConfig.TAG, "VseMoiOnline: Provision data saved — plan=$plan uuid=$xrayUuid base=$baseUrl")
     }
 
     /**
@@ -469,51 +597,153 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     }
 
     /**
-     * VseMoiOnline: Fetch VLESS config from backend and import it
-     * Downloads config from URL with device_id parameter appended
+     * VseMoiOnline: Provision this device with the backend.
+     * POSTs { device_fingerprint, android_id } to the provision endpoint,
+     * parses the JSON response, stores xray_uuid/plan/vless_uri, and imports the VLESS config.
      *
-     * @param baseUrl The provisioning URL to fetch from
-     * @param timeoutMs Timeout in milliseconds for this request
+     * @param provisionUrl Full URL of the /provision endpoint
+     * @param timeoutMs Timeout in milliseconds
      * @return true if successful, false otherwise
      */
-    private suspend fun fetchAndImportConfig(baseUrl: String, timeoutMs: Int): Boolean {
+    private suspend fun fetchAndImportConfig(provisionUrl: String, timeoutMs: Int): Boolean {
         return try {
-            val deviceId = getOrCreateDeviceId()
-            val separator = if (baseUrl.contains("?")) "&" else "?"
-            val fullUrl = "$baseUrl${separator}device_id=$deviceId"
+            val deviceFingerprint = getOrCreateDeviceId()
+            val androidId = getAndroidId()
 
-            Log.i(AppConfig.TAG, "VseMoiOnline: Fetching config from: $fullUrl")
+            val jsonBody = buildString {
+                append("{\"device_fingerprint\":\"$deviceFingerprint\"")
+                if (androidId != null) append(",\"android_id\":\"$androidId\"")
+                append("}")
+            }
 
-            // Download VLESS URI from backend
-            val url = java.net.URL(fullUrl)
+            Log.i(AppConfig.TAG, "VseMoiOnline: POSTing to provision: $provisionUrl")
+
+            val url = java.net.URL(provisionUrl)
             val connection = url.openConnection() as java.net.HttpURLConnection
-            connection.requestMethod = "GET"
+            connection.requestMethod = "POST"
+            connection.doOutput = true
             connection.connectTimeout = timeoutMs
             connection.readTimeout = timeoutMs
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.outputStream.use { it.write(jsonBody.toByteArray(Charsets.UTF_8)) }
 
             val responseCode = connection.responseCode
             if (responseCode == java.net.HttpURLConnection.HTTP_OK) {
-                val vlessUri = connection.inputStream.bufferedReader().readText().trim()
-                Log.i(AppConfig.TAG, "VseMoiOnline: Received config, importing...")
-
+                val responseText = connection.inputStream.bufferedReader().readText()
                 connection.disconnect()
 
-                // Import the VLESS URI using existing v2rayNG functionality
+                val json = org.json.JSONObject(responseText)
+                val vlessUri = json.getString("vless_uri")
+                val xrayUuid = json.getString("xray_uuid")
+                val plan = json.getString("plan")
+                val cabinetUrl = if (json.isNull("cabinet_url")) null else json.getString("cabinet_url")
+
+                saveProvisionData(xrayUuid, plan, vlessUri, provisionUrl, cabinetUrl)
+                Log.i(AppConfig.TAG, "VseMoiOnline: Provisioned — plan=$plan, importing config")
+
+                // Immediately fetch status so days_remaining/traffic are populated before UI renders
+                try { pollStatus(xrayUuid) } catch (e: Exception) {
+                    Log.w(AppConfig.TAG, "VseMoiOnline: Post-provision status poll failed: ${e.message}")
+                }
+
                 withContext(Dispatchers.Main) {
+                    // Remove any existing VseMoiVPN server before importing updated config
+                    mainViewModel.removeAllServer()
                     importBatchConfig(vlessUri)
                     toast(R.string.toast_success)
+                    updateSubscriptionHeader()
+                    updateSubBlock()
                 }
                 true
             } else {
                 connection.disconnect()
-                Log.w(AppConfig.TAG, "VseMoiOnline: HTTP error: $responseCode")
+                Log.w(AppConfig.TAG, "VseMoiOnline: Provision HTTP error: $responseCode")
                 false
             }
 
         } catch (e: Exception) {
-            Log.e(AppConfig.TAG, "VseMoiOnline: Failed to fetch config from $baseUrl", e)
-            throw e // Re-throw to allow timeout detection
+            Log.e(AppConfig.TAG, "VseMoiOnline: Provision failed for $provisionUrl", e)
+            throw e // Re-throw to allow timeout detection in two-cycle logic
         }
+    }
+
+    private fun startStatusPolling() {
+        stopStatusPolling()
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val xrayUuid = prefs.getString(PREF_XRAY_UUID, null) ?: run {
+            Log.w(AppConfig.TAG, "VseMoiOnline: No xray_uuid stored, skipping status polling")
+            return
+        }
+        statusPollingJob = lifecycleScope.launch(Dispatchers.IO) {
+            while (true) {
+                try {
+                    pollStatus(xrayUuid)
+                } catch (e: Exception) {
+                    Log.w(AppConfig.TAG, "VseMoiOnline: Status poll failed: ${e.message}")
+                }
+                delay(45_000)
+            }
+        }
+        Log.i(AppConfig.TAG, "VseMoiOnline: Status polling started")
+    }
+
+    private fun stopStatusPolling() {
+        statusPollingJob?.cancel()
+        statusPollingJob = null
+    }
+
+    private suspend fun pollStatus(xrayUuid: String) {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val backendBaseUrl = prefs.getString(PREF_BACKEND_BASE_URL, null) ?: return
+
+        val connection = java.net.URL("$backendBaseUrl/status/$xrayUuid").openConnection()
+            as java.net.HttpURLConnection
+        connection.requestMethod = "GET"
+        connection.connectTimeout = 10_000
+        connection.readTimeout = 10_000
+
+        val responseCode = connection.responseCode
+        if (responseCode != java.net.HttpURLConnection.HTTP_OK) {
+            connection.disconnect()
+            Log.w(AppConfig.TAG, "VseMoiOnline: Status poll HTTP $responseCode")
+            return
+        }
+
+        val json = org.json.JSONObject(connection.inputStream.bufferedReader().readText())
+        connection.disconnect()
+
+        val plan = json.getString("plan")
+        val currentDomain = if (json.isNull("current_domain")) null else json.getString("current_domain")
+        val daysRemaining = if (json.isNull("days_remaining")) 0 else json.getInt("days_remaining")
+        val throttleMbps = if (json.isNull("throttle_mbps")) 0f else json.getDouble("throttle_mbps").toFloat()
+        val trafficTotalGb = if (!json.isNull("traffic_cap_mb"))
+            json.getDouble("traffic_cap_mb").toFloat() / 1000f
+        else
+            if (plan == "paid") 250f else 25f
+        Log.d(AppConfig.TAG, "VseMoiOnline: Status — plan=$plan domain=$currentDomain throttle=${throttleMbps}Mbps cap=${trafficTotalGb}GB")
+        val trafficRemainingGb: Float = when {
+            !json.isNull("traffic_consumed_mb") -> {
+                val consumedGb = json.getDouble("traffic_consumed_mb").toFloat() / 1000f
+                (trafficTotalGb - consumedGb).coerceAtLeast(0f)
+            }
+            else -> trafficTotalGb
+        }
+
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+            .putString(PREF_PLAN, plan)
+            .putInt(PREF_PAID_DAYS_REMAINING, daysRemaining)
+            .putFloat(PREF_TRAFFIC_TOTAL_GB, trafficTotalGb)
+            .putFloat(PREF_TRAFFIC_REMAINING_GB, trafficRemainingGb)
+            .putFloat(PREF_THROTTLE_MBPS, throttleMbps)
+            .apply()
+
+        withContext(Dispatchers.Main) {
+            updateSubscriptionHeader()
+            updateSubBlock()
+        }
+
+        // Phase 2: if current_domain changed, update backend_base_url and re-provision.
+        // Skipped for now — domain_names table is empty in Phase 1.
     }
 
     @SuppressLint("NotifyDataSetChanged")
@@ -531,16 +761,18 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
             adapter.notifyDataSetChanged()  // Refresh adapter to update switch states
             if (isRunning) {
                 binding.fab.setImageResource(R.drawable.ic_stop_24dp)
-                binding.fab.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.color_fab_active))
+                binding.fab.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.vsm_fab_stop))
                 binding.fab.contentDescription = getString(R.string.action_stop_service)
                 setTestState(getString(R.string.connection_connected))
                 binding.layoutTest.isFocusable = true
+                startStatusPolling()
             } else {
                 binding.fab.setImageResource(R.drawable.ic_play_24dp)
-                binding.fab.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.color_fab_inactive))
+                binding.fab.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.vsm_mint))
                 binding.fab.contentDescription = getString(R.string.tasker_start_service)
                 setTestState(getString(R.string.connection_not_connected))
                 binding.layoutTest.isFocusable = false
+                stopStatusPolling()
             }
         }
         mainViewModel.startListenBroadcast()
@@ -567,7 +799,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
             listId.indexOf(mainViewModel.subscriptionId).takeIf { it >= 0 } ?: (listId.count() - 1)
         binding.tabGroup.selectTab(binding.tabGroup.getTabAt(selectIndex))
         binding.tabGroup.addOnTabSelectedListener(tabGroupListener)
-        binding.tabGroup.isVisible = true
+        binding.tabGroup.isVisible = false  // VseMoiOnline: tab group hidden in main UX
     }
 
     internal fun startV2Ray() {
@@ -591,21 +823,56 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     public override fun onResume() {
         super.onResume()
         mainViewModel.reloadServerList()
+        updateSubscriptionHeader()
+        updateSubBlock()
 
         // VseMoiOnline: Auto-provision on first launch if no servers configured
         checkAndAutoProvision()
     }
 
     /**
-     * VseMoiOnline: Auto-provision if no servers configured
-     * Retries on every resume until successful
-     * Uses fallback URLs if primary provisioning endpoint is unavailable
+     * VseMoiOnline: Auto-provision if no servers configured.
+     *
+     * Three cases:
+     * 1. Servers already in MMKV → nothing to do.
+     * 2. No servers, no stored xray_uuid → fresh device, full provisioning via fallback chain.
+     * 3. No servers, but xray_uuid + vless_uri stored → device is registered in the backend and
+     *    Xray, local MMKV was just cleared (reinstall / data wipe). Re-import the stored URI
+     *    directly without a network round-trip.
      */
     private fun checkAndAutoProvision() {
-        // Check if there are any servers configured
+        // Activation deep link takes ownership of provisioning — don't race it.
+        if (pendingActivationToken != null) {
+            Log.i(AppConfig.TAG, "VseMoiOnline: Skipping auto-provision — activation in progress")
+            return
+        }
+
         val serverList = MmkvManager.decodeServerList()
-        if (serverList.isEmpty()) {
-            Log.i(AppConfig.TAG, "VseMoiOnline: No servers configured, attempting auto-provisioning with fallback")
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+
+        if (serverList.size > 1) {
+            // Multiple configs — stale entries from a previous free→paid upgrade. Clean up.
+            val storedVlessUri = prefs.getString(PREF_VLESS_URI, null)
+            if (storedVlessUri != null) {
+                Log.w(AppConfig.TAG, "VseMoiOnline: Found ${serverList.size} configs, expected 1 — removing stale entries")
+                mainViewModel.removeAllServer()
+                importBatchConfig(storedVlessUri)
+                return
+            }
+            mainViewModel.removeAllServer()
+            // fall through to full provisioning below
+        } else if (serverList.size == 1) {
+            return
+        }
+
+        val storedVlessUri = prefs.getString(PREF_VLESS_URI, null)
+        val storedXrayUuid = prefs.getString(PREF_XRAY_UUID, null)
+
+        if (storedXrayUuid != null && storedVlessUri != null) {
+            Log.i(AppConfig.TAG, "VseMoiOnline: No servers in MMKV but provisioned before — re-importing stored config")
+            importBatchConfig(storedVlessUri)
+        } else {
+            Log.i(AppConfig.TAG, "VseMoiOnline: No servers configured, starting provisioning")
             tryProvisioningWithFallback()
         }
     }
@@ -887,6 +1154,297 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         return super.onKeyDown(keyCode, event)
     }
 
+
+    // ── VseMoiOnline UI ──────────────────────────────────────────────────
+
+    /**
+     * Wire up all VseMoiOnline-specific click handlers and initialise the UI
+     * from whatever data is already stored in SharedPreferences.
+     */
+    private fun setupVsmUi() {
+        binding.layoutSubHeader.setOnClickListener { toggleSubBlock() }
+        binding.tvSubLink.setOnClickListener { openCabinetUrl() }
+        binding.rowServer.setOnClickListener { onServerRowTapped() }
+        binding.btnPay.setOnClickListener { openCabinetUrl() }
+        binding.btnFamily.setOnClickListener { /* Phase 3 — family referral */ }
+        binding.btnRenew.setOnClickListener { openCabinetUrl() }
+        binding.btnCodeSubmit.setOnClickListener { submitActivationCode() }
+        setupCodeFields()
+        updateSubscriptionHeader()
+        updateServerRow()
+        updateSubBlock()
+    }
+
+    private fun toggleSubBlock() {
+        val expanding = binding.layoutSubBody.visibility != View.VISIBLE
+        binding.layoutSubBody.visibility = if (expanding) View.VISIBLE else View.GONE
+        binding.tvSubChevron.text = if (expanding) "∨" else "∧"
+    }
+
+    private fun openCabinetUrl() {
+        val url = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .getString(PREF_CABINET_URL, null) ?: return
+        Utils.openUri(this, url)
+    }
+
+    private fun onServerRowTapped() {
+        val plan = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .getString(PREF_PLAN, "free")
+        if (plan == "free") {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.vsm_server_dialog_title)
+                .setMessage(R.string.vsm_server_dialog_body)
+                .setNegativeButton(R.string.vsm_server_dialog_cancel) { _, _ -> }
+                .setPositiveButton(R.string.vsm_server_dialog_cta) { _, _ -> openCabinetUrl() }
+                .show()
+        }
+        // Paid multi-server selection: Phase 2
+    }
+
+    private fun setupCodeFields() {
+        codeFields = arrayOf(
+            binding.etCode1, binding.etCode2, binding.etCode3, binding.etCode4,
+            binding.etCode5, binding.etCode6, binding.etCode7, binding.etCode8
+        )
+
+        val alphanumericFilter = InputFilter { source, _, _, _, _, _ ->
+            if (isPasting) return@InputFilter null  // handled by paste logic
+            source.filter { it.isLetterOrDigit() }.toString().uppercase()
+        }
+
+        for (i in codeFields.indices) {
+            val field = codeFields[i]
+            field.filters = arrayOf(alphanumericFilter, InputFilter.LengthFilter(1))
+
+            // Paste detection: if pasted text is longer than 1 char, try to fill all fields
+            field.filters = arrayOf(
+                InputFilter { source, start, end, _, _, _ ->
+                    val chunk = source.subSequence(start, end).toString()
+                    if (chunk.length > 1) {
+                        // This is a paste — handle it asynchronously to avoid filter recursion
+                        field.post { handleCodePaste(chunk) }
+                        return@InputFilter ""  // block the raw paste into this single field
+                    }
+                    if (isPasting) return@InputFilter null
+                    chunk.filter { it.isLetterOrDigit() }.toString().uppercase()
+                        .takeIf { it.isNotEmpty() } ?: ""
+                },
+                InputFilter.LengthFilter(1)
+            )
+
+            field.addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                override fun afterTextChanged(s: Editable?) {
+                    if (isPasting) return
+                    if ((s?.length ?: 0) == 1 && i < codeFields.lastIndex) {
+                        codeFields[i + 1].requestFocus()
+                    }
+                    checkSubmitEnabled()
+                }
+            })
+
+            field.setOnKeyListener { _, keyCode, event ->
+                if (keyCode == KeyEvent.KEYCODE_DEL && event.action == KeyEvent.ACTION_DOWN) {
+                    if (field.text.isNullOrEmpty() && i > 0) {
+                        val prev = codeFields[i - 1]
+                        prev.requestFocus()
+                        prev.text?.clear()
+                        checkSubmitEnabled()
+                        return@setOnKeyListener true
+                    }
+                }
+                false
+            }
+        }
+    }
+
+    private fun handleCodePaste(raw: String) {
+        // Strip hyphens/spaces, uppercase, keep only alphanumeric
+        val clean = raw.replace("-", "").replace(" ", "")
+            .filter { it.isLetterOrDigit() }.toString().uppercase()
+        if (clean.length != 8) return  // wrong format — ignore
+        isPasting = true
+        for (i in codeFields.indices) {
+            codeFields[i].setText(clean[i].toString())
+        }
+        isPasting = false
+        codeFields.last().requestFocus()
+        checkSubmitEnabled()
+    }
+
+    private fun checkSubmitEnabled() {
+        val allFilled = codeFields.all { it.text?.length == 1 }
+        binding.btnCodeSubmit.isEnabled = allFilled
+        binding.btnCodeSubmit.alpha = if (allFilled) 1f else 0.4f
+    }
+
+    private fun submitActivationCode() {
+        val code = codeFields.joinToString("") { it.text.toString() }
+        if (code.length != 8) return
+        codeFields.forEach { it.text?.clear() }
+        codeFields.first().requestFocus()
+        checkSubmitEnabled()
+        pendingActivationToken = code
+        handleActivateDeepLink(code)
+    }
+
+    /**
+     * Refresh the subscription row text and colour from SharedPreferences.
+     * Call after provisioning or status poll.
+     */
+    private fun updateSubscriptionHeader() {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val plan = prefs.getString(PREF_PLAN, "free")
+        val days = prefs.getInt(PREF_PAID_DAYS_REMAINING, 0)
+
+        if (plan == "free") {
+            binding.tvSubValue.text = getString(R.string.vsm_sub_free)
+            binding.tvSubValue.setTextColor(ContextCompat.getColor(this, R.color.vsm_sub_free))
+            binding.tvSubValue.clearAnimation()
+        } else {
+            binding.tvSubValue.text = resources.getQuantityString(R.plurals.vsm_days_remaining, days, days)
+            when {
+                days <= 1 -> {
+                    binding.tvSubValue.setTextColor(ContextCompat.getColor(this, R.color.vsm_sub_urgent))
+                    startBlinking(binding.tvSubValue)
+                }
+                days <= 5 -> {
+                    binding.tvSubValue.setTextColor(ContextCompat.getColor(this, R.color.vsm_sub_warn))
+                    binding.tvSubValue.clearAnimation()
+                }
+                else -> {
+                    binding.tvSubValue.setTextColor(ContextCompat.getColor(this, R.color.vsm_sub_ok))
+                    binding.tvSubValue.clearAnimation()
+                }
+            }
+        }
+
+        // Cabinet link is always shown; openCabinetUrl() is a no-op if URL not yet known
+        binding.tvSubLink.visibility = View.VISIBLE
+    }
+
+    private fun startBlinking(view: View) {
+        val anim = AlphaAnimation(1.0f, 0.15f).apply {
+            duration = 550
+            repeatMode = Animation.REVERSE
+            repeatCount = Animation.INFINITE
+        }
+        view.startAnimation(anim)
+    }
+
+    /**
+     * Update the server row flag, name, and arrow colour.
+     * Phase 1: single Frankfurt server, hardcoded.
+     * TODO Phase 2: derive from /servers response and user selection.
+     */
+    private fun updateServerRow() {
+        binding.tvServerFlag.text = "🇩🇪"
+        binding.tvServerName.text = "Франкфурт, Германия"
+
+        val plan = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(PREF_PLAN, "free")
+        // Arrow is active (darker) only for paid users who can actually change servers
+        binding.tvServerArrow.setTextColor(
+            ContextCompat.getColor(
+                this,
+                if (plan == "paid") R.color.vsm_sub_free else R.color.vsm_border
+            )
+        )
+    }
+
+    /**
+     * Update the collapsible sub-block: donut charts, comparison table, action buttons.
+     * Uses values saved by the last /provision or /status response.
+     */
+    private fun updateSubBlock() {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val plan = prefs.getString(PREF_PLAN, "free")
+        val days = prefs.getInt(PREF_PAID_DAYS_REMAINING, 0)
+        val trafficTotalGb = prefs.getFloat(PREF_TRAFFIC_TOTAL_GB, if (plan == "paid") 250f else 25f)
+        val trafficRemainingGb = prefs.getFloat(PREF_TRAFFIC_REMAINING_GB, trafficTotalGb)
+        val throttleMbps = prefs.getFloat(PREF_THROTTLE_MBPS, 0f)
+
+        val isNight = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                Configuration.UI_MODE_NIGHT_YES
+        val ringBg = ContextCompat.getColor(this, R.color.vsm_ring_bg)
+
+        // ── Traffic ring ─────────────────────────────────────────────────
+        val trafficFraction = (trafficRemainingGb / trafficTotalGb).coerceIn(0f, 1f)
+        binding.chartTraffic.apply {
+            ringBgColor = ringBg
+            ringColor = trafficRingColor(trafficFraction)
+            fraction = trafficFraction
+            centerValue = formatGb(trafficRemainingGb)
+            centerSub = getString(R.string.vsm_traffic_of_format, trafficTotalGb.toInt())
+            subTextColor = ContextCompat.getColor(this@MainActivity, R.color.vsm_hint_text)
+            showGhostArc = false
+        }
+
+        // ── Speed ring ───────────────────────────────────────────────────
+        // throttle_mbps from /status represents the tier cap (0 = not yet polled)
+        val speedFraction = if (throttleMbps > 0) (throttleMbps / 25f).coerceIn(0f, 1f) else 0f
+        val speedColor = if (plan == "free")
+            ContextCompat.getColor(this, R.color.vsm_speed_blue)
+        else
+            ContextCompat.getColor(this, R.color.vsm_mint)
+
+        binding.chartSpeed.apply {
+            ringBgColor = ringBg
+            ringColor = speedColor
+            fraction = speedFraction
+            centerValue = if (throttleMbps > 0f)
+                if (throttleMbps % 1f == 0f) throttleMbps.toInt().toString()
+                else String.format("%.1f", throttleMbps)
+            else "–"
+            centerSub = getString(R.string.vsm_speed_of_format, 25)
+            subTextColor = ContextCompat.getColor(this@MainActivity, R.color.vsm_hint_text)
+            showGhostArc = (plan == "free")
+            ghostColor = ContextCompat.getColor(this@MainActivity, R.color.vsm_mint)
+            ghostAlpha = if (isNight) 77 else 56
+        }
+
+        // ── Table and buttons ────────────────────────────────────────────
+        // Free traffic cell is dynamic (from traffic_cap_mb via PREF_TRAFFIC_TOTAL_GB).
+        // Paid traffic cell stays static — /status for free users doesn't return the paid cap.
+        binding.tvCmpFreeTraffic.text = "${trafficTotalGb.toInt()} ГБ"
+
+        if (plan == "free") {
+            binding.layoutCmpTable.visibility = View.VISIBLE
+            binding.btnPay.visibility = View.VISIBLE
+            binding.btnFamily.visibility = View.GONE
+            binding.btnRenew.visibility = View.GONE
+        } else {
+            binding.layoutCmpTable.visibility = View.GONE
+            binding.btnPay.visibility = View.GONE
+            if (days <= 3) {
+                binding.btnRenew.visibility = View.VISIBLE
+                binding.btnFamily.visibility = View.GONE
+            } else {
+                binding.btnFamily.visibility = View.VISIBLE
+                binding.btnRenew.visibility = View.GONE
+            }
+        }
+
+        // ── Activation code section ───────────────────────────────────────
+        // Show for free users and paid users running low on time; hide for comfortable paid
+        binding.layoutActivationSection.visibility =
+            if (plan == "free" || (plan == "paid" && days <= 3)) View.VISIBLE else View.GONE
+    }
+
+    private fun trafficRingColor(fraction: Float): Int = ContextCompat.getColor(
+        this, when {
+            fraction > 0.50f -> R.color.vsm_traffic_green
+            fraction > 0.25f -> R.color.vsm_traffic_amber
+            fraction > 0.10f -> R.color.vsm_traffic_orange
+            else             -> R.color.vsm_traffic_red
+        }
+    )
+
+    /** Format GB value: integer when ≥ 10, one decimal place when < 10. */
+    private fun formatGb(gb: Float): String =
+        if (gb >= 10f) gb.toInt().toString() else String.format("%.1f", gb)
+
+    // ── End VseMoiOnline UI ──────────────────────────────────────────────
 
     override fun onNavigationItemSelected(item: MenuItem): Boolean {
         // Handle navigation view item clicks here.

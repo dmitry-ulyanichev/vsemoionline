@@ -7,4 +7,17 @@
 
     <color name="colorPrimary">#212121</color>
     <color name="colorAccent">#FFFFFF</color>
+
+    <!-- VseMoiOnline dark-mode overrides -->
+    <color name="vsm_toolbar">#0F1222</color>
+    <color name="vsm_surface">#1F2344</color>
+    <color name="vsm_surface2">#262C4A</color>
+    <color name="vsm_border">#2E3558</color>
+    <color name="vsm_ring_bg">#2E3558</color>
+    <color name="vsm_sub_free">#8FA0B4</color>
+    <color name="vsm_sub_ok">#81C784</color>
+    <color name="vsm_sub_warn">#FFB74D</color>
+    <color name="vsm_sub_urgent">#EF9A9A</color>
+    <color name="vsm_link">#90CAF9</color>
+    <color name="vsm_hint_text">#546E7A</color>
 </resources>

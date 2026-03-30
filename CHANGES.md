@@ -6,6 +6,142 @@ This document contains detailed technical information for developers working on 
 
 ---
 
+## Recent Updates (2026-03-29) — Phase 1.6: Xray gRPC traffic stats wired into /status
+
+### Backend: traffic_consumed_mb in /status
+**File**: `client-backend/src/routes/status.js`
+
+`getUserTrafficBytes(xrayUuid)` is now called in the `/status` route. Returns uplink + downlink bytes from Xray `StatsService/GetStats`. Converted to MB (÷ 1 048 576) and returned as `traffic_consumed_mb`. gRPC NOT_FOUND (code 5) is silently treated as zero — normal for a user who hasn't sent any traffic yet. Any other gRPC failure logs a warn and falls back to 0 so the route doesn't break.
+
+Backend tier cap defaults corrected: `FREE_TIER_TRAFFIC_CAP_MB` 5 000 → **25 000**, `PAID_TIER_TRAFFIC_CAP_MB` 100 000 → **250 000** (matching the Android UI display values of 25 GB / 250 GB).
+
+### Android: traffic cap read from /status response
+**File**: `MainActivity.kt`
+
+`pollStatus` now reads `traffic_cap_mb` from the JSON response (÷ 1000 → GB) and saves it as `PREF_TRAFFIC_TOTAL_GB`. Falls back to 25 GB / 250 GB if the field is absent (old server). `updateSubBlock` reads `PREF_TRAFFIC_TOTAL_GB` from prefs instead of hardcoding the value. Log line extended to include `cap=XXgb` for easier verification.
+
+---
+
+## Recent Updates (2026-03-29) — Throttle display + activation UI polish
+
+### Kotlin 2.x compile fix
+`String.toUpperCase()` was removed in Kotlin 2.0 (not just deprecated). Three occurrences in `setupCodeFields()` and `handleCodePaste()` replaced with `.toString().uppercase()`. The explicit `.toString()` call is required because the InputFilter lambda's type context prevents the compiler from resolving `.filter {}` as `String` — without it, `.uppercase()` is also "Unresolved reference".
+
+### Activation code UI additions
+**File**: `layout/activity_main.xml`, `values/strings.xml`
+- Added `TextView` ("Ввести код активации", 13sp, secondary text colour) above the code input row.
+- Added `android:hint="×"` + `android:textColorHint="#80AAAAAA"` to all 8 `EditText`s.
+- Added `tv_code_success` TextView ("✓ Код успешно активирован", mint colour, initially `GONE`) above the activation section — shown for 3 s after a successful activation, then auto-hides via `postDelayed`.
+- Wrapped the label + fields row in `layout_activation_section` (`LinearLayout`, vertical) for unified show/hide.
+
+### Activation section visibility logic
+**File**: `MainActivity.kt` — `updateSubBlock()`
+
+Activation section visibility now tracks plan and days:
+- `plan == "free"` → `VISIBLE`
+- `plan == "paid"` && `days ≤ 3` → `VISIBLE` (renewal still relevant)
+- `plan == "paid"` && `days > 3` → `GONE`
+
+Success flash triggered in `handleActivateDeepLink` success branch (after `updateSubBlock` has already hidden the section — the flash re-surfaces briefly without re-showing the fields).
+
+### Backend: live throttle_mbps in /status
+**Files**: `xray-agent/agent.js`, `client-backend/src/routes/status.js`, `docker-compose.yml`
+
+#### tc-agent — new `GET /throttle/:port` endpoint
+Parses `tc class show dev {IFACE}` for the classid matching the port (port in hex = classid minor). Returns `{ port, rate_kbps }` or `{ port, rate_kbps: null }` if no rule is set. `parseClassRate()` helper handles `Kbit`/`Mbit`/`Gbit`/`bit` unit variants.
+
+tc-agent changed from binding `127.0.0.1` to `0.0.0.0` so Docker containers on the host's bridge network can reach it.
+
+#### status.js — live throttle query with fallback
+`fetchTcThrottle(port)` makes a `GET /throttle/{port}` call to tc-agent with a 2 s timeout. On any failure (unreachable, timeout, bad JSON) it returns `null` and the route falls back to the `FREE/PAID_TIER_THROTTLE_MBPS` env default. `TIER_CONFIG` extended with `port` field; `TC_AGENT_URL` and `TC_AGENT_SECRET` read from env.
+
+#### Docker networking
+The client-backend container runs on the custom `vsemoionline-backend_default` bridge (gateway `172.19.0.1`), not `docker0` (`172.17.0.1`). Required changes:
+- `TC_AGENT_URL=http://172.19.0.1:9000` in `client-backend.env`
+- iptables rule on the host: `iptables -I INPUT -i br-3416f66db0c3 -p tcp --dport 9000 -j ACCEPT`
+  (bridge interface name derived from `docker network inspect vsemoionline-backend_default`)
+
+**Note for multi-server production**: `TC_AGENT_URL` is currently a single env var pointing to the local tc-agent. When multiple Xray VPSes are added, `status.js` should look up the tc-agent URL from `servers.tc_agent_url` in the DB using the device's `assigned_server_id`, rather than a global env var.
+
+---
+
+## Recent Updates (2026-03-29)
+
+### Android UI Phase 1 — Subscription Management Screen
+
+Complete implementation of the VseMoiOnline subscription UI (section 1.11). Single source of truth for visual decisions: `ui_mockup_final.html` (14 screens, free/paid × light/dark).
+
+#### Files added
+- `V2rayNG/app/src/main/java/com/v2ray/ang/ui/DonutChartView.kt` — canvas-drawn donut ring. Properties: `fraction`, `ringColor`, `ringBgColor`, `centerValue`, `centerSub`, `subTextColor`, `showGhostArc`, `ghostColor`, `ghostAlpha`. Ghost arc spans from `fraction×360°` to `360°` (BUTT cap). Main arc starts at −90°, ROUND cap (BUTT when fraction ≥ 1.0). Centre text: 17sp bold + 10sp, vertically centred as two-line block.
+- `V2rayNG/app/src/main/res/drawable/code_field_bg.xml` — selector: 2dp mint stroke when focused, 1dp vsm_border otherwise.
+
+#### Files modified
+- `values/colors.xml` — 20 vsm_ brand colours added; upstream colours untouched.
+- `values-night/colors.xml` — 10 dark-mode overrides appended.
+- `values/strings.xml` — all Russian UI strings (subscription labels, server row, sub-block title, chart labels, comparison table, button labels, plurals for days remaining).
+- `values/themes.xml` + `values-night/themes.xml` — parent changed to `Theme.MaterialComponents.DayNight`; `colorPrimary` → `vsm_link` (#1565C0); `colorPrimaryDark` + `statusBarColor` → `vsm_toolbar`.
+- `menu/menu_main.xml` — `service_restart` moved to overflow (`showAsAction=never`).
+- `layout/activity_main.xml` — full restructure. Kept all original IDs for binding compatibility (tab_group, recycler_view, layout_test set to GONE/0dp height). New structure: AppBarLayout(Toolbar with Dark.ActionBar overlay) → subscription row (42dp) → server row (46dp) → CoordinatorLayout VPN area (weight=1, FAB centred at 88dp) → collapsible sub-block. Sub-block body: two DonutChartViews (96×96dp), comparison table (LinearLayout border trick), pay/family/renew buttons, 8-field code input row.
+- `MainActivity.kt` — new SharedPrefs constants (PREF_PAID_DAYS_REMAINING, PREF_TRAFFIC_REMAINING_GB, PREF_THROTTLE_MBPS, PREF_CABINET_URL); new methods: `setupVsmUi`, `setupCodeFields`, `handleCodePaste`, `checkSubmitEnabled`, `submitActivationCode`, `toggleSubBlock`, `openCabinetUrl`, `onServerRowTapped`, `updateSubscriptionHeader`, `startBlinking`, `updateServerRow`, `updateSubBlock`, `trafficRingColor`, `formatGb`; `pollStatus` extended to parse and persist days_remaining/traffic/throttle; immediate `pollStatus` call after paid activation to avoid "0 дней" blink.
+
+#### Key design notes
+- `tab_group`, `recyclerView`, `layoutTest` kept in layout as GONE — preserves all existing ViewModel and adapter wiring without refactor.
+- Traffic ring colour thresholds: >50% green · 25–50% amber · 10–25% orange · <10% red.
+- Speed ring: blue (free) / mint (paid). Free users get ghost arc at 22% opacity (light) / 30% (dark) showing paid-tier potential.
+- Free user sub-block: charts + comparison table + "Оплатить подписку" + code input.
+- Paid user sub-block: charts + "❤ Подключите родных" (normal) or "Продлить подписку" (≤3 days) + code input.
+- Comparison table borders implemented without custom drawables: parent `LinearLayout` with `vsm_border` background + 1dp padding + 1dp `View` separators between rows and columns.
+
+---
+
+## Recent Updates (2026-03-27)
+
+### Activation Flow Fixes
+
+#### 1. Stale free-tier config removed after upgrade (`checkAndAutoProvision`)
+**File**: `MainActivity.kt`
+
+**Problem**: After a free→paid upgrade, the old free VLESS config remained in the server list alongside the new paid one. The app showed two toggles; toggling the wrong one produced an EOF error.
+
+**Root cause**: `checkAndAutoProvision` returned immediately if MMKV contained any servers (`isNotEmpty()`), so a stale free config was never cleaned up.
+
+**Fix**: On startup, if MMKV contains more than one server (unexpected for VseMoiOnline), remove all configs and re-import from the stored `PREF_VLESS_URI` (which holds the most recently provisioned URI).
+
+```kotlin
+if (serverList.size > 1) {
+    // Multiple configs — stale entries from a previous free→paid upgrade. Clean up.
+    val storedVlessUri = prefs.getString(PREF_VLESS_URI, null)
+    if (storedVlessUri != null) {
+        mainViewModel.removeAllServer()
+        importBatchConfig(storedVlessUri)
+        return
+    }
+    mainViewModel.removeAllServer()
+    // fall through to full provisioning
+} else if (serverList.size == 1) {
+    return
+}
+```
+
+#### 2. VPN tunnel auto-restarts after activation (`handleActivateDeepLink`)
+**File**: `MainActivity.kt`
+
+**Problem**: If the VPN was running (on the free config) when the activation deep link fired, the new paid config was imported but the running tunnel was not restarted. The UI showed "Connected" but traffic failed until the user toggled off and back on.
+
+**Fix**: After a successful re-provision following activation, call `restartV2Ray()` if the VPN is currently running.
+
+```kotlin
+if (success) {
+    toastSuccess("Подписка активирована!")
+    if (mainViewModel.isRunning.value == true) restartV2Ray()
+}
+```
+
+### Modified Files (2026-03-27)
+- `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt` — both fixes above
+
+---
+
 ## Recent Updates (2026-01-07)
 
 ### Two-Cycle Provisioning for Improved UX

@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>VseMoiOnline – Approved UI Design</title>
+<style>
+/* ═══════════════════════════════════════
+   BASE
+═══════════════════════════════════════ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Roboto', 'Segoe UI', sans-serif;
+  background: #B0BEC5;
+  padding: 32px 28px 80px;
+}
+h1 {
+  font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
+  color: #455A64; margin: 40px 0 16px; padding-bottom: 6px;
+  border-bottom: 2px solid #78909C;
+}
+h1:first-of-type { margin-top: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+.col { display: flex; flex-direction: column; gap: 8px; }
+.lbl {
+  font-size: 10px; font-weight: 600; color: #546E7A;
+  letter-spacing: .5px; text-transform: uppercase; max-width: 360px; line-height: 1.4;
+}
+
+/* ═══════════════════════════════════════
+   PHONE SHELL
+═══════════════════════════════════════ */
+.phone {
+  width: 360px;
+  border-radius: 14px;
+  box-shadow: 0 12px 48px rgba(0,0,0,.30);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Light ── */
+.L {
+  background: #F8F9FA;
+  --toolbar:    #1F2344;
+  --surface:    #FFFFFF;
+  --surface2:   #F5F5F5;
+  --border:     #E0E0E0;
+  --tp:         #212121;
+  --ts:         #616161;
+  --th:         #9E9E9E;
+  --link:       #1565C0;
+  --ring-bg:    #E8EAF6;
+  --sub-free:   #757575;
+  --sub-ok:     #2E7D32;
+  --sub-warn:   #E65100;
+  --sub-urgent: #C62828;
+  --tbl-head:   #F5F5F5;
+  --tbl-border: #E0E0E0;
+  --tbl-free:   #9E9E9E;
+  --tbl-paid:   #1565C0;
+}
+/* ── Dark ── */
+.D {
+  background: #151929;
+  --toolbar:    #0F1222;
+  --surface:    #1F2344;
+  --surface2:   #262C4A;
+  --border:     #2E3558;
+  --tp:         #E8EAF0;
+  --ts:         #8FA0B4;
+  --th:         #546E7A;
+  --link:       #90CAF9;
+  --ring-bg:    #2E3558;
+  --sub-free:   #8FA0B4;
+  --sub-ok:     #81C784;
+  --sub-warn:   #FFB74D;
+  --sub-urgent: #EF9A9A;
+  --tbl-head:   #262C4A;
+  --tbl-border: #2E3558;
+  --tbl-free:   #546E7A;
+  --tbl-paid:   #90CAF9;
+}
+
+/* ── Toolbar ── */
+.toolbar {
+  background: var(--toolbar); color: #fff;
+  height: 56px; padding: 0 16px;
+  display: flex; align-items: center; gap: 14px; flex-shrink: 0;
+}
+.t-burger { font-size: 20px; opacity: .85; }
+.t-title  { font-size: 18px; font-weight: 500; flex: 1; }
+.t-dots   { font-size: 20px; opacity: .85; }
+
+/* ── Subscription row ── */
+.sub-row {
+  height: 42px; padding: 0 16px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+}
+.sub-lbl { font-size: 14px; color: var(--ts); }
+.sub-val { font-size: 14px; font-weight: 700; }
+.sub-val.free    { color: var(--sub-free); }
+.sub-val.ok      { color: var(--sub-ok);   }
+.sub-val.warn    { color: var(--sub-warn);  }
+.sub-val.urgent  { color: var(--sub-urgent); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.15} }
+.sub-val.urgent { animation: blink 1.1s step-end infinite; }
+.sub-link {
+  margin-left: auto; font-size: 12px; color: var(--link);
+  text-decoration: none; white-space: nowrap;
+}
+
+/* ── Server row ── */
+.server-row {
+  height: 46px; padding: 0 16px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+}
+.srv-lbl  { font-size: 12px; color: var(--th); }
+.srv-flag { font-size: 18px; }
+.srv-name { font-size: 15px; color: var(--tp); font-weight: 500; }
+.srv-arrow     { font-size: 12px; }
+.srv-arrow.off { color: var(--border); }
+.srv-arrow.on  { color: var(--ts); }
+
+/* ── VPN area (FAB only, no text) ── */
+.vpn-area {
+  min-height: 150px; flex: 1;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface2);
+}
+.fab {
+  width: 88px; height: 88px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 34px; box-shadow: 0 4px 18px rgba(0,0,0,.28);
+}
+.fab.go   { background: #7DC4A0; color: #fff; }
+.fab.stop { background: #E53935; color: #fff; }
+
+/* ── Sub-management block ── */
+.sub-block {
+  flex-shrink: 0; background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+.sub-header {
+  height: 38px; padding: 0 16px;
+  display: flex; align-items: center;
+}
+.sub-header-title {
+  font-size: 11px; color: var(--th);
+  letter-spacing: .6px; flex: 1; font-weight: 600;
+}
+.sub-chevron { font-size: 12px; color: var(--th); }
+.sub-body {
+  padding: 6px 16px 18px;
+  display: flex; flex-direction: column; gap: 11px;
+}
+
+/* ── Donut charts ── */
+.charts-row {
+  display: flex; gap: 20px; justify-content: center; padding-top: 4px;
+}
+.chart-item {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+}
+.donut-wrap { position: relative; width: 96px; height: 96px; }
+.donut-wrap svg { width: 96px; height: 96px; transform: rotate(-90deg); }
+.donut-center {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 1px;
+}
+.dc-val { font-size: 17px; font-weight: 700; line-height: 1; }
+.dc-sub { font-size: 10px; color: var(--th); line-height: 1.35; text-align: center; }
+.chart-lbl { font-size: 12px; color: var(--ts); }
+
+/* ── Comparison table (free user only) ── */
+.cmp-table {
+  width: 100%; border-collapse: collapse;
+  font-size: 12px; border-radius: 6px; overflow: hidden;
+}
+.cmp-table th, .cmp-table td {
+  padding: 6px 8px; text-align: center;
+  border: 1px solid var(--tbl-border);
+}
+.cmp-table th {
+  background: var(--tbl-head); color: var(--th);
+  font-weight: 600; font-size: 11px;
+}
+.cmp-table td { color: var(--tp); }
+.cmp-table td.f { color: var(--tbl-free); }
+.cmp-table td.p { color: var(--tbl-paid); font-weight: 700; }
+.cmp-table .row-lbl { text-align: left; color: var(--ts); font-weight: 500; }
+
+/* ── Buttons ── */
+.btn {
+  width: 100%; height: 48px; border: none; border-radius: 8px;
+  font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.btn.pay    { background: #1565C0; color: #fff; }
+.btn.family { background: #E8F5E9; color: #2E7D32; border: 1.5px solid #A5D6A7; }
+.btn.renew  { background: #FFF3E0; color: #E65100; border: 1.5px solid #FFCC80; }
+.D .btn.family { background: #1A2E1E; color: #81C784; border-color: #2E5433; }
+.D .btn.renew  { background: #2C1E0A; color: #FFB74D; border-color: #5C3D10; }
+
+/* ── Activation code ── */
+.code-row { display: flex; gap: 8px; }
+.code-input {
+  flex: 1; height: 44px; padding: 0 14px;
+  border: 1.5px solid var(--border); border-radius: 8px;
+  font-size: 13px; background: var(--surface2); color: var(--tp); outline: none;
+}
+.code-input::placeholder { color: var(--th); font-size: 12px; }
+.code-submit {
+  width: 44px; height: 44px; background: #7DC4A0; color: #fff;
+  border: none; border-radius: 8px; font-size: 20px;
+}
+
+/* ── Server-popup overlay ── */
+.scrim {
+  position: absolute; inset: 0; background: rgba(0,0,0,.45); z-index: 10;
+}
+.dialog {
+  position: absolute; left: 24px; right: 24px; top: 50%; transform: translateY(-55%);
+  background: #fff; border-radius: 10px; z-index: 11;
+  padding: 22px 22px 0; box-shadow: 0 12px 32px rgba(0,0,0,.35);
+}
+.dialog-title  { font-size: 16px; font-weight: 600; color: #212121; margin-bottom: 10px; }
+.dialog-body   { font-size: 14px; color: #424242; line-height: 1.5; margin-bottom: 16px; }
+.dialog-footer {
+  border-top: 1px solid #E0E0E0;
+  display: flex; justify-content: flex-end; padding: 4px 0;
+}
+.d-btn { border: none; background: none; font-size: 14px; padding: 10px 14px; cursor: pointer; }
+.d-btn.cancel { color: #9E9E9E; }
+.d-btn.cta    { color: #1565C0; font-weight: 700; }
+
+/* ═══════════════════════════════════════
+   SVG RING MATH REFERENCE (r=38)
+   circ = 2π×38 ≈ 238.8
+   dashoffset for X% filled = 238.8×(1−X)
+   Ghost arc (free speed, 11.2% to 100%):
+     arc_len = 212.1, gap = 26.7
+     dasharray="212.1 26.7" dashoffset="212.1"
+═══════════════════════════════════════ */
+
+/* Traffic remaining thresholds:
+   >50% remaining → green  #56AB7B
+   25–50%         → amber  #FFA726
+   10–25%         → orange #FF6B35
+   <10%           → red    #E53935        */
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════
+     LIGHT · FREE USER
+════════════════════════════════════════════════ -->
+<h1>Светлая тема · Бесплатный тариф</h1>
+<div class="row">
+
+  <!-- ① Free · new user · full traffic · panel open · VPN off -->
+  <div class="col">
+    <div class="lbl">① Новый · трафик полный (24/25 ГБ) · панель открыта · VPN выкл</div>
+    <div class="phone L">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="sub-row">
+        <span class="sub-lbl">Подписка:</span>
+        <span class="sub-val free">Бесплатно</span>
+        <a class="sub-link" href="#">Личный кабинет →</a>
+      </div>
+      <div class="server-row">
+        <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
+        <span class="srv-name">Франкфурт, Германия</span>
+        <span class="srv-arrow off">▾</span>
+      </div>
+      <div class="vpn-area"><div class="fab go">▶</div></div>
+      <div class="sub-block">
+        <div class="sub-header">
+          <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
+          <span class="sub-chevron">∨</span>
+        </div>
+        <div class="sub-body">
+          <div class="charts-row">
+            <!-- Traffic remaining 24/25=96% → dashoffset=238.8×0.04=9.6 → GREEN -->
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#E8EAF6" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#56AB7B" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="9.6"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#56AB7B;">24</span>
+                  <span class="dc-sub">из 25 ГБ</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Осталось</span>
+            </div>
+            <!-- Speed 2.8/25=11.2% + ghost arc → BLUE -->
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#E8EAF6" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#7DC4A0" stroke-width="10" stroke-linecap="butt"
+                    opacity=".22" cx="48" cy="48" r="38"
+                    stroke-dasharray="212.1 26.7" stroke-dashoffset="212.1"/>
+                  <circle fill="none" stroke="#1E88E5" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="212.1"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#1E88E5;">2.8</span>
+                  <span class="dc-sub">из 25 Mbps</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Скорость</span>
+            </div>
+          </div>
+          <!-- Comparison table -->
+          <table class="cmp-table">
+            <tr>
+              <th class="row-lbl"></th>
+              <th>Бесплатно</th>
+              <th style="color:var(--tbl-paid);">Платно</th>
+            </tr>
+            <tr>
+              <td class="row-lbl">Скорость</td>
+              <td class="f">2–3 Mbps</td>
+              <td class="p">25 Mbps</td>
+            </tr>
+            <tr>
+              <td class="row-lbl">Трафик</td>
+              <td class="f">25 ГБ</td>
+              <td class="p">500 ГБ</td>
+            </tr>
+            <tr>
+              <td class="row-lbl">Серверы</td>
+              <td class="f">авто</td>
+              <td class="p">на выбор</td>
+            </tr>
+          </table>
+          <button class="btn pay">Оплатить подписку</button>
+          <div class="code-row">
+            <input class="code-input" type="text" placeholder="Ввести код активации">
+            <button class="code-submit">→</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② Free · traffic running low · panel open · VPN on -->
+  <div class="col">
+    <div class="lbl">② Трафик заканчивается (7/25 ГБ) · VPN вкл</div>
+    <div class="phone L">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="sub-row">
+        <span class="sub-lbl">Подписка:</span>
+        <span class="sub-val free">Бесплатно</span>
+        <a class="sub-link" href="#">Личный кабинет →</a>
+      </div>
+      <div class="server-row">
+        <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
+        <span class="srv-name">Франкфурт, Германия</span>
+        <span class="srv-arrow off">▾</span>
+      </div>
+      <div class="vpn-area"><div class="fab stop">■</div></div>
+      <div class="sub-block">
+        <div class="sub-header">
+          <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
+          <span class="sub-chevron">∨</span>
+        </div>
+        <div class="sub-body">
+          <div class="charts-row">
+            <!-- Traffic remaining 7/25=28% → dashoffset=238.8×0.72=171.9 → ORANGE -->
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#E8EAF6" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#FF6B35" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="171.9"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#FF6B35;">7</span>
+                  <span class="dc-sub">из 25 ГБ</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Осталось</span>
+            </div>
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#E8EAF6" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#7DC4A0" stroke-width="10" stroke-linecap="butt"
+                    opacity=".22" cx="48" cy="48" r="38"
+                    stroke-dasharray="212.1 26.7" stroke-dashoffset="212.1"/>
+                  <circle fill="none" stroke="#1E88E5" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="212.1"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#1E88E5;">2.8</span>
+                  <span class="dc-sub">из 25 Mbps</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Скорость</span>
+            </div>
+          </div>
+          <table class="cmp-table">
+            <tr>
+              <th class="row-lbl"></th><th>Бесплатно</th><th style="color:var(--tbl-paid);">Платно</th>
+            </tr>
+            <tr><td class="row-lbl">Скорость</td><td class="f">2–3 Mbps</td><td class="p">25 Mbps</td></tr>
+            <tr><td class="row-lbl">Трафик</td><td class="f">25 ГБ</td><td class="p">500 ГБ</td></tr>
+            <tr><td class="row-lbl">Серверы</td><td class="f">авто</td><td class="p">на выбор</td></tr>
+          </table>
+          <button class="btn pay">Оплатить подписку</button>
+          <div class="code-row">
+            <input class="code-input" type="text" placeholder="Ввести код активации">
+            <button class="code-submit">→</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ③ Free · traffic critical · panel open · VPN on -->
+  <div class="col">
+    <div class="lbl">③ Трафик на исходе (2/25 ГБ) · VPN вкл</div>
+    <div class="phone L">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="sub-row">
+        <span class="sub-lbl">Подписка:</span>
+        <span class="sub-val free">Бесплатно</span>
+        <a class="sub-link" href="#">Личный кабинет →</a>
+      </div>
+      <div class="server-row">
+        <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
+        <span class="srv-name">Франкфурт, Германия</span>
+        <span class="srv-arrow off">▾</span>
+      </div>
+      <div class="vpn-area"><div class="fab stop">■</div></div>
+      <div class="sub-block">
+        <div class="sub-header">
+          <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
+          <span class="sub-chevron">∨</span>
+        </div>
+        <div class="sub-body">
+          <div class="charts-row">
+            <!-- Traffic remaining 2/25=8% → dashoffset=238.8×0.92=219.7 → RED -->
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#E8EAF6" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#E53935" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="219.7"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#E53935;">2</span>
+                  <span class="dc-sub">из 25 ГБ</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Осталось</span>
+            </div>
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#E8EAF6" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#7DC4A0" stroke-width="10" stroke-linecap="butt"
+                    opacity=".22" cx="48" cy="48" r="38"
+                    stroke-dasharray="212.1 26.7" stroke-dashoffset="212.1"/>
+                  <circle fill="none" stroke="#1E88E5" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="212.1"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#1E88E5;">2.8</span>
+                  <span class="dc-sub">из 25 Mbps</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Скорость</span>
+            </div>
+          </div>
+          <table class="cmp-table">
+            <tr>
+              <th class="row-lbl"></th><th>Бесплатно</th><th style="color:var(--tbl-paid);">Платно</th>
+            </tr>
+            <tr><td class="row-lbl">Скорость</td><td class="f">2–3 Mbps</td><td class="p">25 Mbps</td></tr>
+            <tr><td class="row-lbl">Трафик</td><td class="f">25 ГБ</td><td class="p">500 ГБ</td></tr>
+            <tr><td class="row-lbl">Серверы</td><td class="f">авто</td><td class="p">на выбор</td></tr>
+          </table>
+          <button class="btn pay">Оплатить подписку</button>
+          <div class="code-row">
+            <input class="code-input" type="text" placeholder="Ввести код активации">
+            <button class="code-submit">→</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ Free · panel collapsed · VPN on -->
+  <div class="col">
+    <div class="lbl">④ Панель свёрнута · VPN вкл</div>
+    <div class="phone L">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="sub-row">
+        <span class="sub-lbl">Подписка:</span>
+        <span class="sub-val free">Бесплатно</span>
+        <a class="sub-link" href="#">Личный кабинет →</a>
+      </div>
+      <div class="server-row">
+        <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
+        <span class="srv-name">Франкфурт, Германия</span>
+        <span class="srv-arrow off">▾</span>
+      </div>
+      <div class="vpn-area"><div class="fab stop">■</div></div>
+      <div class="sub-block">
+        <div class="sub-header">
+          <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
+          <span class="sub-chevron">∧</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑤ Free · server-select popup -->
+  <div class="col">
+    <div class="lbl">⑤ Попытка сменить сервер</div>
+    <div class="phone L" style="position:relative;">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="sub-row">
+        <span class="sub-lbl">Подписка:</span>
+        <span class="sub-val free">Бесплатно</span>
+        <a class="sub-link" href="#">Личный кабинет →</a>
+      </div>
+      <div class="server-row">
+        <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
+        <span class="srv-name">Франкфурт, Германия</span>
+        <span class="srv-arrow off">▾</span>
+      </div>
+      <div class="vpn-area" style="filter:blur(1.5px);pointer-events:none;">
+        <div class="fab go">▶</div>
+      </div>
+      <div class="sub-block" style="filter:blur(1.5px);pointer-events:none;">
+        <div class="sub-header">
+          <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
+          <span class="sub-chevron">∨</span>
+        </div>
+        <div class="sub-body" style="padding-bottom:10px;">
+          <div class="charts-row">
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#E8EAF6" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#56AB7B" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="9.6"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#56AB7B;">24</span>
+                  <span class="dc-sub">из 25 ГБ</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Осталось</span>
+            </div>
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#E8EAF6" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#7DC4A0" stroke-width="10" stroke-linecap="butt"
+                    opacity=".22" cx="48" cy="48" r="38"
+                    stroke-dasharray="212.1 26.7" stroke-dashoffset="212.1"/>
+                  <circle fill="none" stroke="#1E88E5" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="212.1"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#1E88E5;">2.8</span>
+                  <span class="dc-sub">из 25 Mbps</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Скорость</span>
+            </div>
+          </div>
+          <button class="btn pay">Оплатить подписку</button>
+        </div>
+      </div>
+      <div class="scrim"></div>
+      <div class="dialog">
+        <div class="dialog-title">Выбор сервера</div>
+        <div class="dialog-body">Выбор сервера доступен только в платном тарифе.</div>
+        <div class="dialog-footer">
+          <button class="d-btn cancel">Закрыть</button>
+          <button class="d-btn cta">Оплатить подписку</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /row free light -->
+
+
+<!-- ════════════════════════════════════════════════
+     LIGHT · PAID USER
+════════════════════════════════════════════════ -->
+<h1>Светлая тема · Платный тариф</h1>
+<div class="row">
+
+  <!-- ⑥ Paid · normal · 15 days · multi-server · VPN on -->
+  <div class="col">
+    <div class="lbl">⑥ Норма · 15 дней · несколько серверов · VPN вкл</div>
+    <div class="phone L">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="sub-row">
+        <span class="sub-lbl">Подписка:</span>
+        <span class="sub-val ok">15 дней</span>
+        <a class="sub-link" href="#">Личный кабинет →</a>
+      </div>
+      <div class="server-row" style="cursor:pointer;">
+        <span class="srv-lbl">Сервер</span><span class="srv-flag">🇳🇱</span>
+        <span class="srv-name">Амстердам, Нидерланды</span>
+        <span class="srv-arrow on">▾</span>
+      </div>
+      <div class="vpn-area"><div class="fab stop">■</div></div>
+      <div class="sub-block">
+        <div class="sub-header">
+          <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
+          <span class="sub-chevron">∨</span>
+        </div>
+        <div class="sub-body">
+          <div class="charts-row">
+            <!-- Paid traffic 400/500=80% remaining → dashoffset=238.8×0.20=47.8 → GREEN -->
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#E8EAF6" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#56AB7B" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="47.8"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#56AB7B;">400</span>
+                  <span class="dc-sub">из 500 ГБ</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Осталось</span>
+            </div>
+            <!-- Paid speed 22/25=88% → dashoffset=238.8×0.12=28.7 → MINT (no ghost) -->
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#E8EAF6" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#7DC4A0" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="28.7"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#7DC4A0;">22</span>
+                  <span class="dc-sub">из 25 Mbps</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Скорость</span>
+            </div>
+          </div>
+          <button class="btn family">❤ Подключите родных и близких</button>
+          <div class="code-row">
+            <input class="code-input" type="text" placeholder="Ввести код активации">
+            <button class="code-submit">→</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑦ Paid · 3 days · orange warning -->
+  <div class="col">
+    <div class="lbl">⑦ 3 дня (оранжевый) · VPN вкл</div>
+    <div class="phone L">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="sub-row">
+        <span class="sub-lbl">Подписка:</span>
+        <span class="sub-val warn">3 дня</span>
+        <a class="sub-link" href="#">Личный кабинет →</a>
+      </div>
+      <div class="server-row">
+        <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
+        <span class="srv-name">Франкфурт, Германия</span>
+        <span class="srv-arrow off">▾</span>
+      </div>
+      <div class="vpn-area"><div class="fab stop">■</div></div>
+      <div class="sub-block">
+        <div class="sub-header">
+          <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
+          <span class="sub-chevron">∨</span>
+        </div>
+        <div class="sub-body">
+          <div class="charts-row">
+            <!-- 380/500=76% remaining → dashoffset=238.8×0.24=57.3 → GREEN -->
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#E8EAF6" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#56AB7B" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="57.3"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#56AB7B;">380</span>
+                  <span class="dc-sub">из 500 ГБ</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Осталось</span>
+            </div>
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#E8EAF6" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#7DC4A0" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="28.7"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#7DC4A0;">22</span>
+                  <span class="dc-sub">из 25 Mbps</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Скорость</span>
+            </div>
+          </div>
+          <button class="btn renew">Продлить подписку</button>
+          <div class="code-row">
+            <input class="code-input" type="text" placeholder="Ввести код активации">
+            <button class="code-submit">→</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑧ Paid · 1 day · red blinking -->
+  <div class="col">
+    <div class="lbl">⑧ 1 день (красный, мигает) · VPN вкл</div>
+    <div class="phone L">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="sub-row">
+        <span class="sub-lbl">Подписка:</span>
+        <span class="sub-val urgent">1 день</span>
+        <a class="sub-link" href="#">Личный кабинет →</a>
+      </div>
+      <div class="server-row">
+        <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
+        <span class="srv-name">Франкфурт, Германия</span>
+        <span class="srv-arrow off">▾</span>
+      </div>
+      <div class="vpn-area"><div class="fab stop">■</div></div>
+      <div class="sub-block">
+        <div class="sub-header">
+          <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
+          <span class="sub-chevron">∨</span>
+        </div>
+        <div class="sub-body">
+          <div class="charts-row">
+            <!-- 50/500=10% remaining → dashoffset=238.8×0.90=214.9 → RED -->
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#E8EAF6" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#E53935" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="214.9"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#E53935;">50</span>
+                  <span class="dc-sub">из 500 ГБ</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Осталось</span>
+            </div>
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#E8EAF6" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#7DC4A0" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="28.7"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#7DC4A0;">22</span>
+                  <span class="dc-sub">из 25 Mbps</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Скорость</span>
+            </div>
+          </div>
+          <button class="btn renew">Продлить подписку</button>
+          <div class="code-row">
+            <input class="code-input" type="text" placeholder="Ввести код активации">
+            <button class="code-submit">→</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /row paid light -->
+
+
+<!-- ════════════════════════════════════════════════
+     DARK · FREE USER
+════════════════════════════════════════════════ -->
+<h1>Тёмная тема · Бесплатный тариф</h1>
+<div class="row">
+
+  <!-- ⑨ Dark · free · new user · panel open · VPN off -->
+  <div class="col">
+    <div class="lbl">⑨ Новый · трафик полный · VPN выкл</div>
+    <div class="phone D">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="sub-row">
+        <span class="sub-lbl">Подписка:</span>
+        <span class="sub-val free">Бесплатно</span>
+        <a class="sub-link" href="#">Личный кабинет →</a>
+      </div>
+      <div class="server-row">
+        <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
+        <span class="srv-name">Франкфурт, Германия</span>
+        <span class="srv-arrow off">▾</span>
+      </div>
+      <div class="vpn-area"><div class="fab go">▶</div></div>
+      <div class="sub-block">
+        <div class="sub-header">
+          <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
+          <span class="sub-chevron">∨</span>
+        </div>
+        <div class="sub-body">
+          <div class="charts-row">
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#2E3558" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#56AB7B" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="9.6"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#81C784;">24</span>
+                  <span class="dc-sub">из 25 ГБ</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Осталось</span>
+            </div>
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#2E3558" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#7DC4A0" stroke-width="10" stroke-linecap="butt"
+                    opacity=".30" cx="48" cy="48" r="38"
+                    stroke-dasharray="212.1 26.7" stroke-dashoffset="212.1"/>
+                  <circle fill="none" stroke="#64B5F6" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="212.1"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#64B5F6;">2.8</span>
+                  <span class="dc-sub">из 25 Mbps</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Скорость</span>
+            </div>
+          </div>
+          <table class="cmp-table">
+            <tr>
+              <th class="row-lbl"></th><th>Бесплатно</th><th style="color:var(--tbl-paid);">Платно</th>
+            </tr>
+            <tr><td class="row-lbl">Скорость</td><td class="f">2–3 Mbps</td><td class="p">25 Mbps</td></tr>
+            <tr><td class="row-lbl">Трафик</td><td class="f">25 ГБ</td><td class="p">500 ГБ</td></tr>
+            <tr><td class="row-lbl">Серверы</td><td class="f">авто</td><td class="p">на выбор</td></tr>
+          </table>
+          <button class="btn pay">Оплатить подписку</button>
+          <div class="code-row">
+            <input class="code-input" type="text" placeholder="Ввести код активации">
+            <button class="code-submit">→</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑩ Dark · free · traffic low · VPN on -->
+  <div class="col">
+    <div class="lbl">⑩ Трафик заканчивается (7/25 ГБ) · VPN вкл</div>
+    <div class="phone D">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="sub-row">
+        <span class="sub-lbl">Подписка:</span>
+        <span class="sub-val free">Бесплатно</span>
+        <a class="sub-link" href="#">Личный кабинет →</a>
+      </div>
+      <div class="server-row">
+        <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
+        <span class="srv-name">Франкфурт, Германия</span>
+        <span class="srv-arrow off">▾</span>
+      </div>
+      <div class="vpn-area"><div class="fab stop">■</div></div>
+      <div class="sub-block">
+        <div class="sub-header">
+          <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
+          <span class="sub-chevron">∨</span>
+        </div>
+        <div class="sub-body">
+          <div class="charts-row">
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#2E3558" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#FF6B35" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="171.9"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#FF8A65;">7</span>
+                  <span class="dc-sub">из 25 ГБ</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Осталось</span>
+            </div>
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#2E3558" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#7DC4A0" stroke-width="10" stroke-linecap="butt"
+                    opacity=".30" cx="48" cy="48" r="38"
+                    stroke-dasharray="212.1 26.7" stroke-dashoffset="212.1"/>
+                  <circle fill="none" stroke="#64B5F6" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="212.1"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#64B5F6;">2.8</span>
+                  <span class="dc-sub">из 25 Mbps</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Скорость</span>
+            </div>
+          </div>
+          <table class="cmp-table">
+            <tr>
+              <th class="row-lbl"></th><th>Бесплатно</th><th style="color:var(--tbl-paid);">Платно</th>
+            </tr>
+            <tr><td class="row-lbl">Скорость</td><td class="f">2–3 Mbps</td><td class="p">25 Mbps</td></tr>
+            <tr><td class="row-lbl">Трафик</td><td class="f">25 ГБ</td><td class="p">500 ГБ</td></tr>
+            <tr><td class="row-lbl">Серверы</td><td class="f">авто</td><td class="p">на выбор</td></tr>
+          </table>
+          <button class="btn pay">Оплатить подписку</button>
+          <div class="code-row">
+            <input class="code-input" type="text" placeholder="Ввести код активации">
+            <button class="code-submit">→</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑪ Dark · free · panel collapsed -->
+  <div class="col">
+    <div class="lbl">⑪ Тёмная · панель свёрнута · VPN вкл</div>
+    <div class="phone D">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="sub-row">
+        <span class="sub-lbl">Подписка:</span>
+        <span class="sub-val free">Бесплатно</span>
+        <a class="sub-link" href="#">Личный кабинет →</a>
+      </div>
+      <div class="server-row">
+        <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
+        <span class="srv-name">Франкфурт, Германия</span>
+        <span class="srv-arrow off">▾</span>
+      </div>
+      <div class="vpn-area"><div class="fab stop">■</div></div>
+      <div class="sub-block">
+        <div class="sub-header">
+          <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
+          <span class="sub-chevron">∧</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /row free dark -->
+
+
+<!-- ════════════════════════════════════════════════
+     DARK · PAID USER
+════════════════════════════════════════════════ -->
+<h1>Тёмная тема · Платный тариф</h1>
+<div class="row">
+
+  <!-- ⑫ Dark · paid · normal · multi-server -->
+  <div class="col">
+    <div class="lbl">⑫ Норма · 15 дней · VPN выкл</div>
+    <div class="phone D">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="sub-row">
+        <span class="sub-lbl">Подписка:</span>
+        <span class="sub-val ok">15 дней</span>
+        <a class="sub-link" href="#">Личный кабинет →</a>
+      </div>
+      <div class="server-row" style="cursor:pointer;">
+        <span class="srv-lbl">Сервер</span><span class="srv-flag">🇳🇱</span>
+        <span class="srv-name">Амстердам, Нидерланды</span>
+        <span class="srv-arrow on">▾</span>
+      </div>
+      <div class="vpn-area"><div class="fab go">▶</div></div>
+      <div class="sub-block">
+        <div class="sub-header">
+          <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
+          <span class="sub-chevron">∨</span>
+        </div>
+        <div class="sub-body">
+          <div class="charts-row">
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#2E3558" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#56AB7B" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="47.8"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#81C784;">400</span>
+                  <span class="dc-sub">из 500 ГБ</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Осталось</span>
+            </div>
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#2E3558" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#7DC4A0" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="28.7"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#7DC4A0;">22</span>
+                  <span class="dc-sub">из 25 Mbps</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Скорость</span>
+            </div>
+          </div>
+          <button class="btn family">❤ Подключите родных и близких</button>
+          <div class="code-row">
+            <input class="code-input" type="text" placeholder="Ввести код активации">
+            <button class="code-submit">→</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑬ Dark · paid · 3 days warning -->
+  <div class="col">
+    <div class="lbl">⑬ 3 дня (оранжевый) · VPN вкл</div>
+    <div class="phone D">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="sub-row">
+        <span class="sub-lbl">Подписка:</span>
+        <span class="sub-val warn">3 дня</span>
+        <a class="sub-link" href="#">Личный кабинет →</a>
+      </div>
+      <div class="server-row">
+        <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
+        <span class="srv-name">Франкфурт, Германия</span>
+        <span class="srv-arrow off">▾</span>
+      </div>
+      <div class="vpn-area"><div class="fab stop">■</div></div>
+      <div class="sub-block">
+        <div class="sub-header">
+          <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
+          <span class="sub-chevron">∨</span>
+        </div>
+        <div class="sub-body">
+          <div class="charts-row">
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#2E3558" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#56AB7B" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="57.3"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#81C784;">380</span>
+                  <span class="dc-sub">из 500 ГБ</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Осталось</span>
+            </div>
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#2E3558" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#7DC4A0" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="28.7"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#7DC4A0;">22</span>
+                  <span class="dc-sub">из 25 Mbps</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Скорость</span>
+            </div>
+          </div>
+          <button class="btn renew">Продлить подписку</button>
+          <div class="code-row">
+            <input class="code-input" type="text" placeholder="Ввести код активации">
+            <button class="code-submit">→</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑭ Dark · paid · 1 day urgent -->
+  <div class="col">
+    <div class="lbl">⑭ 1 день (красный, мигает) · VPN вкл</div>
+    <div class="phone D">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="sub-row">
+        <span class="sub-lbl">Подписка:</span>
+        <span class="sub-val urgent">1 день</span>
+        <a class="sub-link" href="#">Личный кабинет →</a>
+      </div>
+      <div class="server-row">
+        <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
+        <span class="srv-name">Франкфурт, Германия</span>
+        <span class="srv-arrow off">▾</span>
+      </div>
+      <div class="vpn-area"><div class="fab stop">■</div></div>
+      <div class="sub-block">
+        <div class="sub-header">
+          <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
+          <span class="sub-chevron">∨</span>
+        </div>
+        <div class="sub-body">
+          <div class="charts-row">
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#2E3558" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#E53935" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="214.9"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#EF9A9A;">50</span>
+                  <span class="dc-sub">из 500 ГБ</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Осталось</span>
+            </div>
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#2E3558" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#7DC4A0" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="28.7"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#7DC4A0;">22</span>
+                  <span class="dc-sub">из 25 Mbps</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Скорость</span>
+            </div>
+          </div>
+          <button class="btn renew">Продлить подписку</button>
+          <div class="code-row">
+            <input class="code-input" type="text" placeholder="Ввести код активации">
+            <button class="code-submit">→</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /row paid dark -->
+
+</body>
+</html>

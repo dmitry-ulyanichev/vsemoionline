@@ -6,6 +6,55 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **Activation code UI polish**
+  - "Ввести код активации" label above the 8-field code input row
+  - Half-transparent grey × hint placeholders in each code field
+  - "✓ Код успешно активирован" success flash (3 s auto-hide) shown in place of the input after a successful activation
+
+- **tc-agent: live throttle read endpoint**
+  - `GET /throttle/:port` returns `{ port, rate_kbps }` by parsing the live `tc class show` output for that port's classid
+  - Enables the backend to read the actual applied rate rather than a static config value
+
+- **tc-agent: bootstrap throttle on startup**
+  - Throttle rules are now applied automatically at agent start via `FREE_TIER_PORT` / `FREE_TIER_RATE_KBPS` env vars (and optionally `PAID_TIER_PORT` / `PAID_TIER_RATE_KBPS`)
+  - Survives reboots without manual curl intervention; values stored in `/etc/tc-agent.env`
+
+- **Backend: live throttle_mbps in /status**
+  - `/status` now queries tc-agent for the currently applied rate on the device's tier port (free: 8444, paid: 8445)
+  - Falls back to `FREE_TIER_THROTTLE_MBPS` / `PAID_TIER_THROTTLE_MBPS` env defaults if tc-agent is unreachable
+  - `TC_AGENT_URL` and `TC_AGENT_SECRET` env vars added to `client-backend`
+
+### Changed
+- **Activation section visibility**
+  - Hidden for paid users with > 3 days remaining (subscription comfortable — no action needed)
+  - Shown for free users and paid users with ≤ 3 days (renewal via code still relevant)
+  - Managed by `updateSubBlock()` alongside the existing button visibility logic
+
+### Fixed
+- **Kotlin 2.x compile error in code field filters**
+  - `String.toUpperCase()` was removed in Kotlin 2.0; replaced with `.toString().uppercase()` in all three InputFilter lambdas in `setupCodeFields()` and `handleCodePaste()`
+
+- **Android UI Phase 1 — full subscription management screen**
+  - Brand colour palette (20 vsm_ colours, dark-mode overrides) and Material Components theme
+  - Russian UI strings throughout (subscription labels, server row, sub-block, comparison table, buttons)
+  - Custom `DonutChartView` — canvas-drawn donut ring with ghost arc, centre text, configurable colours
+  - Restructured `activity_main.xml`: subscription row, server row, CoordinatorLayout VPN area (FAB centred), collapsible "УПРАВЛЕНИЕ ПОДПИСКОЙ" block with donut charts, comparison table, pay/renew/family buttons, and 8-field activation code input
+  - 8-field activation code input (`et_code_1`–`et_code_8`) with auto-advance on type, backspace-to-previous, clipboard paste validation (strips hyphens, validates 8 alphanumeric chars), submit button enabled only when all fields filled
+  - `setupCodeFields()`, `handleCodePaste()`, `checkSubmitEnabled()` in `MainActivity.kt`
+  - Status polling now populates traffic/speed donut charts and subscription header from SharedPreferences
+  - `code_field_bg.xml` selector drawable: mint border when focused, muted border at rest
+
+### Fixed
+- **Stale free-tier config removed after upgrade**
+  - After a free→paid upgrade, the old free VLESS config is now cleaned up on next app launch
+  - `checkAndAutoProvision()` detects more than one server in MMKV and restores from the stored (paid) URI
+  - Eliminates the two-toggle bug where toggling the wrong entry produced an EOF error
+
+- **VPN tunnel auto-restarts after activation**
+  - If the VPN was running when an activation deep link was processed, the tunnel now restarts automatically with the new paid config
+  - Previously required the user to manually toggle off and back on to get working traffic
+
 ### Changed
 - **Two-cycle provisioning for improved UX**
   - Cycle 1: Quick scan with 3-second timeout tries all URLs rapidly

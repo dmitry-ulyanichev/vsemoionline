@@ -5,5 +5,5 @@
         android:id="@+id/service_restart"
         android:icon="@drawable/ic_refresh_24dp"
         android:title="@string/title_service_restart"
-        app:showAsAction="always" />
+        app:showAsAction="never" />
 </menu>

@@ -11,108 +11,791 @@
         android:fitsSystemWindows="true"
         android:orientation="vertical">
 
+        <!-- ── Toolbar ─────────────────────────────────── -->
         <com.google.android.material.appbar.AppBarLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:background="@color/vsm_toolbar">
 
             <androidx.appcompat.widget.Toolbar
                 android:id="@+id/toolbar"
                 android:layout_width="match_parent"
-                android:layout_height="?attr/actionBarSize" />
+                android:layout_height="?attr/actionBarSize"
+                android:background="@color/vsm_toolbar"
+                android:theme="@style/ThemeOverlay.MaterialComponents.Dark.ActionBar"
+                app:popupTheme="@style/ThemeOverlay.MaterialComponents.Light" />
 
         </com.google.android.material.appbar.AppBarLayout>
 
-        <RelativeLayout
+        <!-- ── Subscription row (42dp) ─────────────────── -->
+        <LinearLayout
+            android:id="@+id/row_subscription"
             android:layout_width="match_parent"
-            android:layout_height="match_parent">
+            android:layout_height="42dp"
+            android:orientation="horizontal"
+            android:paddingStart="@dimen/padding_spacing_dp16"
+            android:paddingEnd="@dimen/padding_spacing_dp16"
+            android:gravity="center_vertical"
+            android:background="@color/vsm_surface">
 
-            <androidx.coordinatorlayout.widget.CoordinatorLayout
-                android:id="@+id/main_content"
+            <TextView
+                android:id="@+id/tv_sub_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/vsm_sub_label"
+                android:textSize="14sp"
+                android:textColor="?android:textColorSecondary" />
+
+            <TextView
+                android:id="@+id/tv_sub_value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="@string/vsm_sub_free"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@color/vsm_sub_free" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/tv_sub_link"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/vsm_cabinet_link"
+                android:textSize="12sp"
+                android:textColor="@color/vsm_link" />
+
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/vsm_border" />
+
+        <!-- ── Server row (46dp) ────────────────────────── -->
+        <LinearLayout
+            android:id="@+id/row_server"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:orientation="horizontal"
+            android:paddingStart="@dimen/padding_spacing_dp16"
+            android:paddingEnd="@dimen/padding_spacing_dp16"
+            android:gravity="center_vertical"
+            android:background="@color/vsm_surface"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                android:id="@+id/tv_server_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/vsm_server_label"
+                android:textSize="12sp"
+                android:textColor="?android:textColorHint"
+                android:layout_marginEnd="8dp" />
+
+            <TextView
+                android:id="@+id/tv_server_flag"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="18sp"
+                android:layout_marginEnd="4dp" />
+
+            <TextView
+                android:id="@+id/tv_server_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="15sp"
+                android:textColor="?android:textColorPrimary" />
+
+            <TextView
+                android:id="@+id/tv_server_arrow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="▾"
+                android:textSize="12sp"
+                android:layout_marginStart="4dp"
+                android:textColor="@color/vsm_border" />
+
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/vsm_border" />
+
+        <!-- ── VPN area (flexible height) ──────────────── -->
+        <androidx.coordinatorlayout.widget.CoordinatorLayout
+            android:id="@+id/main_content"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="@color/vsm_surface2"
+            android:minHeight="120dp">
+
+            <!-- Progress bar docked at top -->
+            <com.google.android.material.progressindicator.LinearProgressIndicator
+                android:id="@+id/pb_waiting"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent">
+                android:layout_height="wrap_content"
+                android:layout_gravity="top"
+                android:indeterminate="true"
+                android:visibility="invisible"
+                app:indicatorColor="@color/vsm_mint" />
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:orientation="vertical">
+            <!-- FAB centered in the VPN area -->
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/fab"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="@string/tasker_start_service"
+                android:src="@drawable/ic_play_24dp"
+                android:visibility="visible"
+                app:fabCustomSize="88dp"
+                app:maxImageSize="40dp"
+                app:backgroundTint="@color/vsm_mint" />
 
-                    <com.google.android.material.progressindicator.LinearProgressIndicator
-                        android:id="@+id/pb_waiting"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:indeterminate="true"
-                        android:visibility="invisible"
-                        app:indicatorColor="@color/color_fab_active" />
+            <!-- Hidden V2rayNG internals — kept for binding/adapter/ViewModel wiring -->
+            <com.google.android.material.tabs.TabLayout
+                android:id="@+id/tab_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                app:tabMode="scrollable"
+                app:tabTextAppearance="@style/TabLayoutTextStyle" />
 
-                    <com.google.android.material.tabs.TabLayout
-                        android:id="@+id/tab_group"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:padding="@dimen/padding_spacing_dp8"
-                        app:tabIndicatorFullWidth="false"
-                        app:tabMode="scrollable"
-                        app:tabTextAppearance="@style/TabLayoutTextStyle" />
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recycler_view"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:visibility="gone"
+                android:scrollbars="vertical" />
 
-                    <androidx.recyclerview.widget.RecyclerView
-                        android:id="@+id/recycler_view"
-                        android:layout_width="match_parent"
-                        android:layout_height="0dp"
-                        android:layout_weight="1"
-                        android:nextFocusRight="@+id/fab"
-                        android:scrollbars="vertical" />
+            <LinearLayout
+                android:id="@+id/layout_test"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:visibility="gone"
+                android:orientation="vertical">
 
-                    <LinearLayout
-                        android:id="@+id/layout_test"
-                        android:layout_width="match_parent"
-                        android:layout_height="@dimen/view_height_dp64"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:nextFocusLeft="@+id/recycler_view"
-                        android:nextFocusRight="@+id/fab"
-                        android:orientation="vertical">
-
-                        <View
-                            android:layout_width="wrap_content"
-                            android:layout_height="1dp"
-                            android:background="@color/divider_color_light" />
-
-                        <TextView
-                            android:id="@+id/tv_test_state"
-                            android:layout_width="wrap_content"
-                            android:layout_height="match_parent"
-                            android:gravity="start|center"
-                            android:maxLines="2"
-                            android:minLines="1"
-                            android:paddingStart="@dimen/padding_spacing_dp16"
-                            android:text="@string/connection_test_pending"
-                            android:textAppearance="@style/TextAppearance.AppCompat.Small" />
-
-                    </LinearLayout>
-                </LinearLayout>
-
-                <FrameLayout
+                <TextView
+                    android:id="@+id/tv_test_state"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="bottom|end"
-                    android:layout_marginEnd="@dimen/padding_spacing_dp16">
+                    android:text="@string/connection_test_pending"
+                    android:textAppearance="@style/TextAppearance.AppCompat.Small" />
 
-                    <com.google.android.material.floatingactionbutton.FloatingActionButton
-                        android:id="@+id/fab"
+            </LinearLayout>
+
+        </androidx.coordinatorlayout.widget.CoordinatorLayout>
+
+        <!-- ── Subscription management block ───────────── -->
+        <LinearLayout
+            android:id="@+id/layout_sub_block"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@color/vsm_surface">
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/vsm_border" />
+
+            <!-- Header — always visible, tap to expand/collapse -->
+            <LinearLayout
+                android:id="@+id/layout_sub_header"
+                android:layout_width="match_parent"
+                android:layout_height="38dp"
+                android:orientation="horizontal"
+                android:paddingStart="@dimen/padding_spacing_dp16"
+                android:paddingEnd="@dimen/padding_spacing_dp16"
+                android:gravity="center_vertical"
+                android:clickable="true"
+                android:focusable="true">
+
+                <TextView
+                    android:id="@+id/tv_sub_block_title"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/vsm_sub_block_title"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.06"
+                    android:textColor="?android:textColorHint" />
+
+                <TextView
+                    android:id="@+id/tv_sub_chevron"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="∨"
+                    android:textSize="12sp"
+                    android:textColor="?android:textColorHint" />
+
+            </LinearLayout>
+
+            <!-- Collapsible body (VISIBLE = expanded by default) -->
+            <LinearLayout
+                android:id="@+id/layout_sub_body"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingStart="@dimen/padding_spacing_dp16"
+                android:paddingEnd="@dimen/padding_spacing_dp16"
+                android:paddingTop="6dp"
+                android:paddingBottom="18dp"
+                android:visibility="visible">
+
+                <!-- Charts row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:paddingTop="4dp">
+
+                    <!-- Traffic chart item -->
+                    <LinearLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_gravity="bottom|end"
-                        android:layout_marginBottom="@dimen/view_height_dp36"
-                        android:clickable="true"
-                        android:contentDescription="@string/tasker_start_service"
-                        android:focusable="true"
-                        android:nextFocusLeft="@+id/layout_test"
-                        android:src="@drawable/ic_play_24dp"
-                        android:visibility="gone"
-                        app:layout_anchorGravity="bottom|right|end" />
+                        android:orientation="vertical"
+                        android:gravity="center_horizontal"
+                        android:layout_marginEnd="10dp">
 
-                </FrameLayout>
-            </androidx.coordinatorlayout.widget.CoordinatorLayout>
-        </RelativeLayout>
+                        <com.v2ray.ang.ui.DonutChartView
+                            android:id="@+id/chart_traffic"
+                            android:layout_width="96dp"
+                            android:layout_height="96dp" />
+
+                        <TextView
+                            android:id="@+id/tv_chart_traffic_label"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="5dp"
+                            android:text="@string/vsm_chart_remaining"
+                            android:textSize="12sp"
+                            android:textColor="?android:textColorSecondary" />
+
+                    </LinearLayout>
+
+                    <!-- Speed chart item -->
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:gravity="center_horizontal"
+                        android:layout_marginStart="10dp">
+
+                        <com.v2ray.ang.ui.DonutChartView
+                            android:id="@+id/chart_speed"
+                            android:layout_width="96dp"
+                            android:layout_height="96dp" />
+
+                        <TextView
+                            android:id="@+id/tv_chart_speed_label"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="5dp"
+                            android:text="@string/vsm_chart_speed"
+                            android:textSize="12sp"
+                            android:textColor="?android:textColorSecondary" />
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+                <!-- Comparison table — free user only, GONE for paid -->
+                <LinearLayout
+                    android:id="@+id/layout_cmp_table"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="11dp"
+                    android:orientation="vertical"
+                    android:background="@color/vsm_border"
+                    android:padding="1dp"
+                    android:visibility="visible">
+
+                    <!-- Header row -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:background="@color/vsm_surface2">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:padding="6dp" />
+
+                        <View
+                            android:layout_width="1dp"
+                            android:layout_height="match_parent"
+                            android:background="@color/vsm_border" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:padding="6dp"
+                            android:text="@string/vsm_cmp_col_free"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:gravity="center"
+                            android:textColor="?android:textColorHint" />
+
+                        <View
+                            android:layout_width="1dp"
+                            android:layout_height="match_parent"
+                            android:background="@color/vsm_border" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:padding="6dp"
+                            android:text="@string/vsm_cmp_col_paid"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:gravity="center"
+                            android:textColor="@color/vsm_link" />
+
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="@color/vsm_border" />
+
+                    <!-- Скорость row -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:background="@color/vsm_surface">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:padding="6dp"
+                            android:text="@string/vsm_cmp_row_speed"
+                            android:textSize="12sp"
+                            android:textColor="?android:textColorSecondary" />
+
+                        <View
+                            android:layout_width="1dp"
+                            android:layout_height="match_parent"
+                            android:background="@color/vsm_border" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:padding="6dp"
+                            android:text="@string/vsm_cmp_free_speed"
+                            android:textSize="12sp"
+                            android:gravity="center"
+                            android:textColor="?android:textColorHint" />
+
+                        <View
+                            android:layout_width="1dp"
+                            android:layout_height="match_parent"
+                            android:background="@color/vsm_border" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:padding="6dp"
+                            android:text="@string/vsm_cmp_paid_speed"
+                            android:textSize="12sp"
+                            android:textStyle="bold"
+                            android:gravity="center"
+                            android:textColor="@color/vsm_link" />
+
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="@color/vsm_border" />
+
+                    <!-- Трафик row -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:background="@color/vsm_surface">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:padding="6dp"
+                            android:text="@string/vsm_cmp_row_traffic"
+                            android:textSize="12sp"
+                            android:textColor="?android:textColorSecondary" />
+
+                        <View
+                            android:layout_width="1dp"
+                            android:layout_height="match_parent"
+                            android:background="@color/vsm_border" />
+
+                        <TextView
+                            android:id="@+id/tv_cmp_free_traffic"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:padding="6dp"
+                            android:text="@string/vsm_cmp_free_traffic"
+                            android:textSize="12sp"
+                            android:gravity="center"
+                            android:textColor="?android:textColorHint" />
+
+                        <View
+                            android:layout_width="1dp"
+                            android:layout_height="match_parent"
+                            android:background="@color/vsm_border" />
+
+                        <TextView
+                            android:id="@+id/tv_cmp_paid_traffic"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:padding="6dp"
+                            android:text="@string/vsm_cmp_paid_traffic"
+                            android:textSize="12sp"
+                            android:textStyle="bold"
+                            android:gravity="center"
+                            android:textColor="@color/vsm_link" />
+
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="@color/vsm_border" />
+
+                    <!-- Серверы row -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:background="@color/vsm_surface">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:padding="6dp"
+                            android:text="@string/vsm_cmp_row_servers"
+                            android:textSize="12sp"
+                            android:textColor="?android:textColorSecondary" />
+
+                        <View
+                            android:layout_width="1dp"
+                            android:layout_height="match_parent"
+                            android:background="@color/vsm_border" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:padding="6dp"
+                            android:text="@string/vsm_cmp_free_servers"
+                            android:textSize="12sp"
+                            android:gravity="center"
+                            android:textColor="?android:textColorHint" />
+
+                        <View
+                            android:layout_width="1dp"
+                            android:layout_height="match_parent"
+                            android:background="@color/vsm_border" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:padding="6dp"
+                            android:text="@string/vsm_cmp_paid_servers"
+                            android:textSize="12sp"
+                            android:textStyle="bold"
+                            android:gravity="center"
+                            android:textColor="@color/vsm_link" />
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+                <!-- Оплатить подписку — free user, always visible initially -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_pay"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="11dp"
+                    android:text="@string/vsm_btn_pay"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:textColor="@android:color/white"
+                    app:cornerRadius="8dp"
+                    app:backgroundTint="@color/vsm_pay_btn"
+                    app:strokeWidth="0dp" />
+
+                <!-- ❤ Подключите родных и близких — paid, days > 3, initially GONE -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_family"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="11dp"
+                    android:text="@string/vsm_btn_family"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:textColor="#2E7D32"
+                    app:cornerRadius="8dp"
+                    app:strokeWidth="1.5dp"
+                    app:strokeColor="#A5D6A7"
+                    app:backgroundTint="#E8F5E9"
+                    android:visibility="gone" />
+
+                <!-- Продлить подписку — paid, days ≤ 3, initially GONE -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_renew"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="11dp"
+                    android:text="@string/vsm_btn_renew"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:textColor="#E65100"
+                    app:cornerRadius="8dp"
+                    app:strokeWidth="1.5dp"
+                    app:strokeColor="#FFCC80"
+                    app:backgroundTint="#FFF3E0"
+                    android:visibility="gone" />
+
+                <!-- Activation success flash (shown briefly after code accepted, then auto-hides) -->
+                <TextView
+                    android:id="@+id/tv_code_success"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="11dp"
+                    android:text="@string/vsm_code_activated"
+                    android:textSize="13sp"
+                    android:textColor="@color/vsm_mint"
+                    android:gravity="center"
+                    android:visibility="gone" />
+
+                <!-- Activation section: shown for free users and paid users with ≤3 days left -->
+                <LinearLayout
+                    android:id="@+id/layout_activation_section"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="11dp"
+                    android:text="@string/vsm_label_enter_code"
+                    android:textSize="13sp"
+                    android:textColor="?android:textColorSecondary" />
+
+                <!-- Activation code row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <!-- 8 single-char code fields with hyphen separator -->
+                    <EditText
+                        android:id="@+id/et_code_1"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/code_field_bg"
+                        android:gravity="center"
+                        android:inputType="textCapCharacters|textNoSuggestions"
+                        android:maxLength="1"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:imeOptions="actionNext"
+                        android:paddingStart="0dp"
+                        android:paddingEnd="0dp"
+                        android:hint="×"
+                        android:textColorHint="#80AAAAAA" />
+
+                    <EditText
+                        android:id="@+id/et_code_2"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/code_field_bg"
+                        android:gravity="center"
+                        android:inputType="textCapCharacters|textNoSuggestions"
+                        android:maxLength="1"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:imeOptions="actionNext"
+                        android:paddingStart="0dp"
+                        android:paddingEnd="0dp"
+                        android:hint="×"
+                        android:textColorHint="#80AAAAAA" />
+
+                    <EditText
+                        android:id="@+id/et_code_3"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/code_field_bg"
+                        android:gravity="center"
+                        android:inputType="textCapCharacters|textNoSuggestions"
+                        android:maxLength="1"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:imeOptions="actionNext"
+                        android:paddingStart="0dp"
+                        android:paddingEnd="0dp"
+                        android:hint="×"
+                        android:textColorHint="#80AAAAAA" />
+
+                    <EditText
+                        android:id="@+id/et_code_4"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/code_field_bg"
+                        android:gravity="center"
+                        android:inputType="textCapCharacters|textNoSuggestions"
+                        android:maxLength="1"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:imeOptions="actionNext"
+                        android:paddingStart="0dp"
+                        android:paddingEnd="0dp"
+                        android:hint="×"
+                        android:textColorHint="#80AAAAAA" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:layout_marginEnd="6dp"
+                        android:text="–"
+                        android:textSize="18sp"
+                        android:textColor="?android:textColorSecondary"
+                        android:gravity="center" />
+
+                    <EditText
+                        android:id="@+id/et_code_5"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/code_field_bg"
+                        android:gravity="center"
+                        android:inputType="textCapCharacters|textNoSuggestions"
+                        android:maxLength="1"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:imeOptions="actionNext"
+                        android:paddingStart="0dp"
+                        android:paddingEnd="0dp"
+                        android:hint="×"
+                        android:textColorHint="#80AAAAAA" />
+
+                    <EditText
+                        android:id="@+id/et_code_6"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/code_field_bg"
+                        android:gravity="center"
+                        android:inputType="textCapCharacters|textNoSuggestions"
+                        android:maxLength="1"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:imeOptions="actionNext"
+                        android:paddingStart="0dp"
+                        android:paddingEnd="0dp"
+                        android:hint="×"
+                        android:textColorHint="#80AAAAAA" />
+
+                    <EditText
+                        android:id="@+id/et_code_7"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/code_field_bg"
+                        android:gravity="center"
+                        android:inputType="textCapCharacters|textNoSuggestions"
+                        android:maxLength="1"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:imeOptions="actionNext"
+                        android:paddingStart="0dp"
+                        android:paddingEnd="0dp"
+                        android:hint="×"
+                        android:textColorHint="#80AAAAAA" />
+
+                    <EditText
+                        android:id="@+id/et_code_8"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/code_field_bg"
+                        android:gravity="center"
+                        android:inputType="textCapCharacters|textNoSuggestions"
+                        android:maxLength="1"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:imeOptions="actionDone"
+                        android:paddingStart="0dp"
+                        android:paddingEnd="0dp"
+                        android:hint="×"
+                        android:textColorHint="#80AAAAAA" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_code_submit"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:layout_marginStart="8dp"
+                        android:text="→"
+                        android:textSize="20sp"
+                        android:textColor="@android:color/white"
+                        android:enabled="false"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        app:cornerRadius="8dp"
+                        app:backgroundTint="@color/vsm_mint"
+                        app:strokeWidth="0dp" />
+
+                </LinearLayout>
+
+                </LinearLayout> <!-- /layout_activation_section -->
+
+            </LinearLayout>
+
+        </LinearLayout>
+
     </LinearLayout>
 
     <com.google.android.material.navigation.NavigationView
@@ -122,8 +805,6 @@
         android:layout_gravity="start"
         app:headerLayout="@layout/nav_header"
         app:itemIconTint="@color/colorAccent"
-        app:menu="@menu/menu_drawer">
-
-    </com.google.android.material.navigation.NavigationView>
+        app:menu="@menu/menu_drawer" />
 
 </androidx.drawerlayout.widget.DrawerLayout>
