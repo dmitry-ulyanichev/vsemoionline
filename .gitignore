@@ -70,3 +70,9 @@ V2rayNG/app/google-services.json
 Thumbs.db
 .DS_Store
 .github/workflows/
+
+Ignore implementation files
+commands.txt
+IMPLEMENTATION_PLAN.md
+ui_mockup_final.html
+VseMoiOnline_ Backend_UX.md

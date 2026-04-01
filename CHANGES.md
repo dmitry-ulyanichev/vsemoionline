@@ -6,6 +6,127 @@ This document contains detailed technical information for developers working on 
 
 ---
 
+## Recent Updates (2026-04-01) — UI animation pass
+
+### Android: animated backgrounds
+**File**: `MainActivity.kt` — `applyAnimatedBackgrounds()`, `animateBackground()`
+
+`ValueAnimator.ofArgb(*colors)` with `REVERSE` repeat and `LinearInterpolator` applied to `binding.toolbar` (9 000 ms half-cycle, 5 navy-purple-wine keyframes) and `binding.mainContent` (12 000 ms, 5 lavender-blush keyframes for light / deeper blues for dark). Colors are hardcoded arrays in code rather than resources because they are intermediate interpolation waypoints, not semantic design tokens. `applyAnimatedBackgrounds()` is called at end of `onCreate`.
+
+**File**: `VsmGradientBackground.kt` (new — unused; PoC for radial gradient blob backgrounds)
+
+Standalone singleton `VsmGradientBackground.attach(view, baseColor, blobs)` that overrides the view's `Drawable` background with a `RadialGradient`-based custom drawable driven by per-blob `ValueAnimator`s. Each `BlobConfig` specifies colour, radius fraction, start/end X/Y fractions, and cycle duration. Soft-layer rendering enabled via `LAYER_TYPE_SOFTWARE`. Not wired into MainActivity yet — kept for Phase 2 richer backgrounds.
+
+### Android: FAB power icon + halo pulse
+**Files**: `MainActivity.kt` — `setFabConnected()`, `startFabPulse()`, `stopFabPulse()`, `refreshFabIdleAppearance()`; `drawable/ic_power.xml`, `drawable/fab_halo.xml`
+
+`ic_power.xml` is a single path power-button vector, replacing the separate `ic_play_24dp` / `ic_stop_24dp`. `fab_halo` is a sibling View (large circle) positioned behind the FAB via FrameLayout layering.
+
+`setFabConnected(true)` → dark red tint + semi-transparent red halo + `startFabPulse()`. `startFabPulse()` uses `ObjectAnimator.ofPropertyValuesHolder` (scaleX, scaleY, alpha) on `fabHalo`, 1200 ms REVERSE INFINITE with AccelerateDecelerate interpolator.
+
+`refreshFabIdleAppearance()` → green tint + faint green halo if no block reason; grey tint + transparent halo if `connectionBlockedReason()` non-null. Sets `tv_vpn_status` text accordingly.
+
+### Android: connection blocking
+**File**: `MainActivity.kt` — `connectionBlockedReason()`
+
+Returns localised string if `paid_days_remaining == 0` (reads `PREF_PAID_DAYS_REMAINING`) or `traffic_remaining_gb <= 0f` (reads `PREF_TRAFFIC_REMAINING_GB`). FAB click checks this first — shows toast and returns if blocked. Idle FAB appearance also reflects block state via `refreshFabIdleAppearance()`.
+
+New string resources: `vpn_connected`, `vpn_disconnected`, `vpn_connecting`, `vpn_blocked_days`, `vpn_blocked_traffic`.
+
+### Android: effectiveDays traffic-exhaustion logic
+**File**: `MainActivity.kt` — `updateSubscriptionHeader()`, `updateSubBlock()`
+
+`effectiveDays = if (plan == "paid" && trafficRemainingGb <= 0f) 0 else days`. Drives urgency colours, activation section visibility, and button state. Speed ring fraction is 0 + red colour when traffic exhausted; ghost arc hidden when exhausted.
+
+### Android: subscription button pulse animations
+**File**: `MainActivity.kt` — `updateSubButtons()`, `startRenewPulse()`, `stopRenewPulse()`
+
+`updateSubButtons(plan, daysRemaining, trafficFraction)` replaces the inline visibility logic in `updateSubBlock()`. `btnPayContainer` (wraps btnPay) shown for free users; `btnRenew` shown for paid users with ≤ 3 days or < 10 % traffic; `btnFamily` shown otherwise. When `btnRenew` is shown, `startRenewPulse()` animates its text colour between `vsm_sub_urgent` and `vsm_sub_urgent_hi` (700 ms REVERSE INFINITE).
+
+### Android: tv_sub_value urgent pulse
+**File**: `MainActivity.kt` — `setSubValueUrgentPulse()`
+
+Same 700 ms ValueAnimator on `tv_sub_value` text colour when urgency threshold hit (≤ 3 `effectiveDays`). Replaces the previous `AlphaAnimation`-based `startBlinking()` call. Alarm threshold widened from 1 day to 3 days.
+
+### Android: collapsed hint badge
+**File**: `MainActivity.kt` — `updateCollapsedHint()`; `activity_main.xml` — `tv_sub_traffic_hint`
+
+Small badge shown inside the subscription header row when `layoutSubBody` is not visible. Three states: hidden (> 30 % traffic + > 3 days), warn (10–30 % traffic — orange text), urgent (< 10 % or ≤ 3 days — pulsing red). `updateCollapsedHint` called from both `toggleSubBlock()` and `updateSubBlock()` so it stays in sync on every data refresh.
+
+### Android: chevron rotation on expand/collapse
+**File**: `MainActivity.kt` — `toggleSubBlock()`; `drawable/ic_chevron_down.xml`
+
+`binding.tvSubChevron.animate().rotation(...).setDuration(200).start()` replaces the text swap `"∨"`/`"∧"`. `tvSubChevron` changed from `TextView` to `ImageView` using the new vector drawable.
+
+### Android: app-open status refresh (rate-limited 30 min)
+**File**: `MainActivity.kt` — `checkAndAutoProvision()`, `PREF_LAST_STATUS_POLL_MS`
+
+When the existing server list has exactly 1 entry (normal returning user), a `/status` poll is now triggered if `System.currentTimeMillis() - PREF_LAST_STATUS_POLL_MS >= 30 * 60 * 1000`. Poll runs on `Dispatchers.IO` in a `lifecycleScope.launch`. On success, `PREF_LAST_STATUS_POLL_MS` is updated. Post-provision poll also saves the timestamp. Prevents subscription header from showing stale days after the user hasn't opened the app for hours.
+
+### Android: cabinet link visibility
+`tvSubLink` (Личный кабинет) is now hidden for free users (`View.GONE`) — it was always shown before. Night-mode variant uses `pill_link_bg_dark` drawable applied in `setupVsmUi()`.
+
+### Android: server row arrow → ImageView
+`tvServerArrow` changed from `TextView` to `ImageView` in layout. Tint set via `imageTintList` (green = paid, border grey = free).
+
+### New drawables and resources
+| File | Purpose |
+|---|---|
+| `drawable/ic_power.xml` | Power-button FAB icon |
+| `drawable/fab_halo.xml` | Circular halo behind FAB |
+| `drawable/fab_bg_go.xml` | Green gradient for idle FAB bg |
+| `drawable/fab_bg_stop.xml` | Red gradient for connected FAB bg |
+| `drawable/ic_chevron_down.xml` | Animated expand/collapse chevron |
+| `drawable/ic_chevron_right_small.xml` | Server row arrow |
+| `drawable/ic_arrow_right.xml` | Generic right-arrow |
+| `drawable/pill_link_bg.xml` | Cabinet link pill (light) |
+| `drawable/pill_link_bg_dark.xml` | Cabinet link pill (dark) |
+| `drawable/btn_pay_bg.xml` | Pay button gradient background |
+| `drawable/btn_submit_bg.xml` | Submit/renew button background |
+| `drawable/divider_fade.xml` | Fade-out horizontal divider |
+| `drawable-night/divider_fade.xml` | Night-mode divider variant |
+| `drawable/ic_launcher_background_gradient.xml` | Gradient launcher icon bg |
+| `drawable/ic_launcher_foreground_padded.xml` | Launcher foreground with padding |
+| `values/colors.xml` | `vsm_sub_urgent_hi` (#FF5252), `vsm_pill_stroke` |
+| `values/dimens.xml` | `fab_elevation_default` (8dp), `fab_elevation_pulse` (22dp) |
+| `VsmGradientBackground.kt` | Radial blob gradient helper (PoC, not yet wired) |
+
+---
+
+## Recent Updates (2026-03-30) — Phase 1 Complete
+
+### Android: comparison table free-traffic cell wired dynamically
+**File**: `MainActivity.kt`, `activity_main.xml`
+
+`tv_cmp_free_traffic` TextView in the comparison table now has an ID and is set programmatically in `updateSubBlock()` to `"${trafficTotalGb.toInt()} ГБ"` — driven by `PREF_TRAFFIC_TOTAL_GB` (populated from `traffic_cap_mb` in `/status`). Previously hardcoded to the string resource "25 ГБ". The paid column remains a static string resource — the backend does not return the paid cap to free users.
+
+### Android: cabinet_url wired to payment/cabinet buttons
+**Files**: `MainActivity.kt`; Backend: `provision.js`, `status.js`
+
+Both `/provision` and `/status` now return `cabinet_url: "${CABINET_BASE_URL}/payment"` (env var `CABINET_BASE_URL=https://vmonl.store`). The Android `pollStatus` coroutine now saves `cabinet_url` from the `/status` response to `PREF_CABINET_URL` (previously only `/provision` saved it). "Оплатить подписку", "Продлить подписку", and "Личный кабинет →" all call `openCabinetUrl()` which reads `PREF_CABINET_URL` and opens it in the browser.
+
+### Backend: POST /admin/throttle
+**File**: `client-backend/src/routes/admin.js`
+
+Protected by `x-admin-secret` header (`ADMIN_SECRET` env var). Body: `{ tier: "free"|"paid", rate_kbps }`. Resolves port from `FREE_TIER_PORT`/`PAID_TIER_PORT` env vars, proxies to tc-agent `POST /throttle`. Returns `{ ok, tier, port, rate_kbps }`. Returns 503 if `ADMIN_SECRET` unset (fail-closed).
+
+### Backend: POST /admin/token
+**File**: `client-backend/src/routes/admin.js`
+
+Same `x-admin-secret` auth. Body: `{ xray_uuid, days, expires_hours? }` (default expiry 48h). Looks up `account_id` from `devices`, generates a Crockford Base32 token via `lib/token.js`, inserts into `tokens` table, returns `{ token, token_raw, activation_url, days, expires_at }`. `activation_url` is `${CABINET_BASE_URL}/activate/app?token=...` — ready to send to the user.
+
+### Infrastructure: nginx reverse proxy replacing Caddy
+**Files**: `infra/nginx/vmonl.store.conf`, `.github/workflows/nginx.yml`, `docker-compose.yml`
+
+Caddy was ruled out because nginx was already running on the VPS managing other sites (ports 80/443 in use). `infra/nginx/vmonl.store.conf` proxies `vmonl.store` → `http://127.0.0.1:3000` with correct forwarding headers. TLS via certbot `--nginx`. Workflow deploys config to `/etc/nginx/sites-enabled/` and runs certbot on first deploy (idempotent thereafter). `CERTBOT_EMAIL` stored as GitHub repo secret.
+
+### Infrastructure: APK volume mount
+**File**: `docker-compose.yml`
+
+Added `volumes: [/opt/vsemoi:/opt/vsemoi:ro]` to the `client-backend` service so the container can read `/opt/vsemoi/vsemoivpn.apk` from the host. `APK_PATH=/opt/vsemoi/vsemoivpn.apk` in `client-backend.env`.
+
+---
+
 ## Recent Updates (2026-03-29) — Phase 1.6: Xray gRPC traffic stats wired into /status
 
 ### Backend: traffic_consumed_mb in /status

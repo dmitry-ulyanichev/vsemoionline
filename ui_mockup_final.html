@@ -3,13 +3,37 @@
 <head>
 <meta charset="UTF-8">
 <title>VseMoiOnline – Approved UI Design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+/* ═══════════════════════════════════════
+   ANIMATED GRADIENT PROPERTIES
+═══════════════════════════════════════ */
+@property --va-b1x { syntax: '<percentage>'; inherits: false; initial-value: 22%; }
+@property --va-b1y { syntax: '<percentage>'; inherits: false; initial-value: 35%; }
+@property --va-b2x { syntax: '<percentage>'; inherits: false; initial-value: 80%; }
+@property --va-b2y { syntax: '<percentage>'; inherits: false; initial-value: 68%; }
+@property --tb-b1x { syntax: '<percentage>'; inherits: false; initial-value: 15%; }
+@property --tb-b1y { syntax: '<percentage>'; inherits: false; initial-value: 50%; }
+
+@keyframes va-drift {
+  0%   { --va-b1x: 22%; --va-b1y: 35%; --va-b2x: 80%; --va-b2y: 68%; }
+  50%  { --va-b1x: 32%; --va-b1y: 27%; --va-b2x: 70%; --va-b2y: 76%; }
+  100% { --va-b1x: 22%; --va-b1y: 35%; --va-b2x: 80%; --va-b2y: 68%; }
+}
+@keyframes tb-drift {
+  0%   { --tb-b1x: -25%; --tb-b1y: 30%; }
+  50%  { --tb-b1x: 120%; --tb-b1y: 70%; }
+  100% { --tb-b1x: -25%; --tb-b1y: 30%; }
+}
+
 /* ═══════════════════════════════════════
    BASE
 ═══════════════════════════════════════ */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-  font-family: 'Roboto', 'Segoe UI', sans-serif;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
   background: #B0BEC5;
   padding: 32px 28px 80px;
 }
@@ -33,6 +57,7 @@ h1:first-of-type { margin-top: 0; }
   width: 360px;
   border-radius: 14px;
   box-shadow: 0 12px 48px rgba(0,0,0,.30);
+  border: 1px solid rgba(255,255,255,0.18);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -42,7 +67,7 @@ h1:first-of-type { margin-top: 0; }
 .L {
   background: #F8F9FA;
   --toolbar:    #1F2344;
-  --surface:    #FFFFFF;
+  --surface:    #FAFBFC;
   --surface2:   #F5F5F5;
   --border:     #E0E0E0;
   --tp:         #212121;
@@ -54,6 +79,7 @@ h1:first-of-type { margin-top: 0; }
   --sub-ok:     #2E7D32;
   --sub-warn:   #E65100;
   --sub-urgent: #C62828;
+  --sub-urgent-hi: #FF5252;
   --tbl-head:   #F5F5F5;
   --tbl-border: #E0E0E0;
   --tbl-free:   #9E9E9E;
@@ -75,6 +101,7 @@ h1:first-of-type { margin-top: 0; }
   --sub-ok:     #81C784;
   --sub-warn:   #FFB74D;
   --sub-urgent: #EF9A9A;
+  --sub-urgent-hi: #FF8A80;
   --tbl-head:   #262C4A;
   --tbl-border: #2E3558;
   --tbl-free:   #546E7A;
@@ -83,18 +110,48 @@ h1:first-of-type { margin-top: 0; }
 
 /* ── Toolbar ── */
 .toolbar {
-  background: var(--toolbar); color: #fff;
-  height: 56px; padding: 0 16px;
+  background:
+    radial-gradient(ellipse 300px 300px at var(--tb-b1x) var(--tb-b1y), rgba(125,196,160,0.13) 0%, transparent 100%),
+    var(--toolbar);
+  color: #fff; height: 56px; padding: 0 16px;
   display: flex; align-items: center; gap: 14px; flex-shrink: 0;
+  border-bottom: 1px solid rgba(125, 196, 160, 0.30);
+  animation: tb-drift 14s ease-in-out infinite;
 }
-.t-burger { font-size: 20px; opacity: .85; }
-.t-title  { font-size: 18px; font-weight: 500; flex: 1; }
-.t-dots   { font-size: 20px; opacity: .85; }
+.t-title  { font-size: 18px; font-weight: 500; flex: 1; letter-spacing: 0.2px; }
+.t-burger { font-size: 0; width: 20px; height: 20px; flex-shrink: 0; }
+.t-burger::before {
+  content: '';
+  display: block; width: 20px; height: 20px;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round'><line x1='3' y1='6' x2='21' y2='6'/><line x1='3' y1='12' x2='21' y2='12'/><line x1='3' y1='18' x2='21' y2='18'/></svg>") center/contain no-repeat;
+}
+.t-dots { font-size: 0; width: 20px; height: 20px; flex-shrink: 0; }
+.t-dots::before {
+  content: '';
+  display: block; width: 20px; height: 20px;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='white'><circle cx='12' cy='5' r='1.8'/><circle cx='12' cy='12' r='1.8'/><circle cx='12' cy='19' r='1.8'/></svg>") center/contain no-repeat;
+}
+
+/* ── Gradient divider mixin ── */
+.sub-row, .server-row, .sub-block {
+  --divider: linear-gradient(90deg, transparent 0%, var(--border) 20%, var(--border) 80%, transparent 100%);
+}
+.sub-row    { border-bottom: none; position: relative; }
+.sub-row::after, .server-row::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+  background: var(--divider);
+}
+.server-row { border-bottom: none; position: relative; }
+.sub-block  { border-top: none; position: relative; }
+.sub-block::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: var(--divider);
+}
 
 /* ── Subscription row ── */
 .sub-row {
   height: 42px; padding: 0 16px;
-  background: var(--surface); border-bottom: 1px solid var(--border);
+  background: var(--surface);
   display: flex; align-items: center; gap: 6px; flex-shrink: 0;
 }
 .sub-lbl { font-size: 14px; color: var(--ts); }
@@ -103,23 +160,55 @@ h1:first-of-type { margin-top: 0; }
 .sub-val.ok      { color: var(--sub-ok);   }
 .sub-val.warn    { color: var(--sub-warn);  }
 .sub-val.urgent  { color: var(--sub-urgent); }
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.15} }
-.sub-val.urgent { animation: blink 1.1s step-end infinite; }
+@keyframes color-pulse-urgent {
+  0%, 100% { color: var(--sub-urgent); }
+  50%       { color: var(--sub-urgent-hi); }
+}
+.sub-val.urgent { animation: color-pulse-urgent 1.4s ease-in-out infinite; }
 .sub-link {
-  margin-left: auto; font-size: 12px; color: var(--link);
-  text-decoration: none; white-space: nowrap;
+  margin-left: auto; font-size: 11px; font-weight: 600; color: var(--link);
+  text-decoration: none; white-space: nowrap; letter-spacing: 0.2px;
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 3px 6px 3px 9px; border-radius: 20px;
+}
+.L .sub-link {
+  border: 1px solid rgba(21, 101, 192, 0.20);
+}
+.D .sub-link {
+  border: 1px solid rgba(144, 202, 249, 0.20);
+  background: rgba(144, 202, 249, 0.07);
+}
+.sub-link::after {
+  content: ''; display: block; width: 12px; height: 12px; flex-shrink: 0;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='9 18 15 12 9 6'/></svg>") center/contain no-repeat;
+  mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='9 18 15 12 9 6'/></svg>") center/contain no-repeat;
 }
 
 /* ── Server row ── */
 .server-row {
   height: 46px; padding: 0 16px;
-  background: var(--surface); border-bottom: 1px solid var(--border);
+  background: var(--surface);
   display: flex; align-items: center; gap: 8px; flex-shrink: 0;
 }
 .srv-lbl  { font-size: 12px; color: var(--th); }
 .srv-flag { font-size: 18px; }
-.srv-name { font-size: 15px; color: var(--tp); font-weight: 500; }
-.srv-arrow     { font-size: 12px; }
+.srv-name { font-size: 15px; color: var(--tp); font-weight: 600; }
+/* Ping dot — only shown when server is selectable (paid) */
+.server-row:has(.srv-arrow.on) .srv-name::after {
+  content: '';
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--sub-ok); margin-left: 8px; vertical-align: middle;
+  box-shadow: 0 0 5px var(--sub-ok);
+}
+/* SVG chevron via CSS mask — inherits currentColor automatically */
+.srv-arrow { font-size: 0; display: inline-flex; align-items: center; }
+.srv-arrow::before {
+  content: ''; display: block; width: 11px; height: 11px;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>") center/contain no-repeat;
+  mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>") center/contain no-repeat;
+}
 .srv-arrow.off { color: var(--border); }
 .srv-arrow.on  { color: var(--ts); }
 
@@ -129,13 +218,56 @@ h1:first-of-type { margin-top: 0; }
   display: flex; align-items: center; justify-content: center;
   background: var(--surface2);
 }
+.L .vpn-area {
+  background:
+    radial-gradient(ellipse at var(--va-b1x) var(--va-b1y), rgba(125,196,160,0.18) 0%, transparent 52%),
+    radial-gradient(ellipse at var(--va-b2x) var(--va-b2y), rgba(21,101,192,0.10) 0%, transparent 48%),
+    #F5F5F5;
+  animation: va-drift 12s ease-in-out infinite;
+}
+.D .vpn-area {
+  background:
+    radial-gradient(ellipse at var(--va-b1x) var(--va-b1y), rgba(0,210,230,0.10) 0%, transparent 52%),
+    radial-gradient(ellipse at var(--va-b2x) var(--va-b2y), rgba(139,92,246,0.09) 0%, transparent 48%),
+    #262C4A;
+  animation: va-drift 12s ease-in-out infinite;
+}
+
 .fab {
   width: 88px; height: 88px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 34px; box-shadow: 0 4px 18px rgba(0,0,0,.28);
+  font-size: 34px;
 }
-.fab.go   { background: #7DC4A0; color: #fff; }
-.fab.stop { background: #E53935; color: #fff; }
+.fab.go {
+  background: radial-gradient(circle at 38% 38%, #9FD5B8 0%, #56AB7B 100%);
+  color: #fff;
+  box-shadow: 0 4px 18px rgba(0,0,0,.28), 0 0 0 10px rgba(125,196,160,0.14);
+}
+@keyframes fab-pulse {
+  0%, 100% { box-shadow: 0 4px 20px rgba(0,0,0,.32), 0 0 0  7px rgba(229,57,53,0.18); }
+  50%       { box-shadow: 0 4px 20px rgba(0,0,0,.32), 0 0 0 16px rgba(229,57,53,0.08); }
+}
+.fab.stop {
+  background: radial-gradient(circle at 38% 38%, #EF5350 0%, #B71C1C 100%);
+  color: #fff;
+  animation: fab-pulse 2.4s ease-in-out infinite;
+}
+/* ── Power icon (CSS-only, hides ▶/■) ── */
+.fab { font-size: 0; }
+.fab::before {
+  content: '';
+  display: block;
+  width: 36px; height: 36px;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.1' stroke-linecap='round'><line x1='12' y1='2' x2='12' y2='12'/><path d='M6.4 4.8a9 9 0 1 0 11.2 0'/></svg>") center/contain no-repeat;
+}
+/* ── VPN center wrapper + status label ── */
+.vpn-center {
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+}
+.vpn-status {
+  font-size: 12px; font-weight: 500; letter-spacing: 0.4px;
+  color: var(--ts); text-align: center;
+}
 
 /* ── Sub-management block ── */
 .sub-block {
@@ -150,7 +282,28 @@ h1:first-of-type { margin-top: 0; }
   font-size: 11px; color: var(--th);
   letter-spacing: .6px; flex: 1; font-weight: 600;
 }
-.sub-chevron { font-size: 12px; color: var(--th); }
+.sub-chevron { font-size: 0; width: 14px; height: 14px; display: inline-flex; align-items: center; flex-shrink: 0; }
+.sub-chevron::before {
+  content: ''; display: block; width: 14px; height: 14px;
+  background-color: var(--th);
+  -webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>") center/contain no-repeat;
+  mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>") center/contain no-repeat;
+}
+.sub-chevron.up::before { transform: rotate(180deg); }
+.sub-traffic-hint {
+  font-size: 11px; font-weight: 700; margin-right: 10px;
+  display: flex; align-items: center; gap: 4px;
+}
+.sub-traffic-hint::before {
+  content: ''; display: block; width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor; box-shadow: 0 0 4px currentColor;
+}
+.sub-traffic-hint.warn   { color: var(--sub-warn); }
+.sub-traffic-hint.urgent { color: var(--sub-urgent); animation: color-pulse-urgent 1.4s ease-in-out infinite; }
+/* Renew button pulses in sync with urgent subscription text */
+.phone:has(.sub-val.urgent) .btn.renew {
+  animation: color-pulse-urgent 1.4s ease-in-out infinite;
+}
 .sub-body {
   padding: 6px 16px 18px;
   display: flex; flex-direction: column; gap: 11px;
@@ -194,26 +347,56 @@ h1:first-of-type { margin-top: 0; }
 
 /* ── Buttons ── */
 .btn {
-  width: 100%; height: 48px; border: none; border-radius: 8px;
-  font-size: 15px; font-weight: 600; cursor: pointer;
+  width: 100%; height: 48px; border: none; border-radius: 10px;
+  font-size: 15px; font-weight: 600; cursor: pointer; letter-spacing: 0.2px;
 }
-.btn.pay    { background: #1565C0; color: #fff; }
-.btn.family { background: #E8F5E9; color: #2E7D32; border: 1.5px solid #A5D6A7; }
-.btn.renew  { background: #FFF3E0; color: #E65100; border: 1.5px solid #FFCC80; }
-.D .btn.family { background: #1A2E1E; color: #81C784; border-color: #2E5433; }
-.D .btn.renew  { background: #2C1E0A; color: #FFB74D; border-color: #5C3D10; }
+.btn.pay {
+  background: linear-gradient(160deg, #2196F3 0%, #1565C0 100%);
+  color: #fff;
+  box-shadow: 0 4px 18px rgba(21, 101, 192, 0.45);
+}
+.btn.family {
+  background: #FAFBFC;
+  color: #2E7D32; border: 1.5px solid rgba(46, 125, 50, 0.22);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+}
+.btn.renew {
+  background: #FAFBFC;
+  color: #E65100; border: 1.5px solid rgba(230, 81, 0, 0.22);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+}
+.D .btn.family {
+  background: var(--surface2);
+  color: #81C784; border: 1.5px solid rgba(129, 199, 132, 0.20);
+  box-shadow: none;
+}
+.D .btn.renew {
+  background: var(--surface2);
+  color: #FFB74D; border: 1.5px solid rgba(255, 183, 77, 0.20);
+  box-shadow: none;
+}
 
 /* ── Activation code ── */
-.code-row { display: flex; gap: 8px; }
-.code-input {
-  flex: 1; height: 44px; padding: 0 14px;
-  border: 1.5px solid var(--border); border-radius: 8px;
-  font-size: 13px; background: var(--surface2); color: var(--tp); outline: none;
+.activation-section { display: flex; flex-direction: column; gap: 7px; }
+.code-label  { font-size: 12px; color: var(--ts); font-weight: 500; }
+.code-success {
+  font-size: 12px; font-weight: 600; color: #7DC4A0; display: none;
 }
-.code-input::placeholder { color: var(--th); font-size: 12px; }
+.code-row { display: flex; gap: 5px; align-items: center; }
+.code-field {
+  flex: 1; min-width: 0; height: 38px;
+  border: 1.5px solid var(--border); border-radius: 7px;
+  font-size: 15px; font-weight: 700; text-align: center;
+  background: var(--surface2); color: var(--tp); outline: none;
+  caret-color: #7DC4A0;
+}
+.code-field::placeholder { color: rgba(160,160,160,0.40); }
+.code-field.focused { border: 2px solid #7DC4A0; box-shadow: 0 0 0 3px rgba(125,196,160,0.15); }
 .code-submit {
-  width: 44px; height: 44px; background: #7DC4A0; color: #fff;
-  border: none; border-radius: 8px; font-size: 20px;
+  width: 38px; height: 38px; flex-shrink: 0;
+  background: radial-gradient(circle at 38% 38%, #9FD5B8 0%, #56AB7B 100%);
+  color: #fff; border: none; border-radius: 8px; font-size: 18px;
+  box-shadow: 0 3px 10px rgba(86,171,123,0.38);
 }
 
 /* ── Server-popup overlay ── */
@@ -222,7 +405,7 @@ h1:first-of-type { margin-top: 0; }
 }
 .dialog {
   position: absolute; left: 24px; right: 24px; top: 50%; transform: translateY(-55%);
-  background: #fff; border-radius: 10px; z-index: 11;
+  background: #FAFBFC; border-radius: 10px; z-index: 11;
   padding: 22px 22px 0; box-shadow: 0 12px 32px rgba(0,0,0,.35);
 }
 .dialog-title  { font-size: 16px; font-weight: 600; color: #212121; margin-bottom: 10px; }
@@ -253,6 +436,7 @@ h1:first-of-type { margin-top: 0; }
 </head>
 <body>
 
+
 <!-- ════════════════════════════════════════════════
      LIGHT · FREE USER
 ════════════════════════════════════════════════ -->
@@ -269,18 +453,18 @@ h1:first-of-type { margin-top: 0; }
       <div class="sub-row">
         <span class="sub-lbl">Подписка:</span>
         <span class="sub-val free">Бесплатно</span>
-        <a class="sub-link" href="#">Личный кабинет →</a>
+        <a class="sub-link" href="#">Личный кабинет</a>
       </div>
       <div class="server-row">
         <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
         <span class="srv-name">Франкфурт, Германия</span>
         <span class="srv-arrow off">▾</span>
       </div>
-      <div class="vpn-area"><div class="fab go">▶</div></div>
+      <div class="vpn-area"><div class="vpn-center"><div class="fab go">▶</div><span class="vpn-status">Нажмите для подключения</span></div></div>
       <div class="sub-block">
         <div class="sub-header">
           <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
-          <span class="sub-chevron">∨</span>
+          <span class="sub-chevron down"></span>
         </div>
         <div class="sub-body">
           <div class="charts-row">
@@ -342,9 +526,19 @@ h1:first-of-type { margin-top: 0; }
             </tr>
           </table>
           <button class="btn pay">Оплатить подписку</button>
-          <div class="code-row">
-            <input class="code-input" type="text" placeholder="Ввести код активации">
-            <button class="code-submit">→</button>
+          <div class="activation-section">
+            <span class="code-label">Ввести код активации</span>
+            <div class="code-row">
+              <input class="code-field" maxlength="1" value="A">
+              <input class="code-field" maxlength="1" value="B">
+              <input class="code-field" maxlength="1" value="7">
+              <input class="code-field focused" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <button class="code-submit">→</button>
+            </div>
           </div>
         </div>
       </div>
@@ -361,18 +555,18 @@ h1:first-of-type { margin-top: 0; }
       <div class="sub-row">
         <span class="sub-lbl">Подписка:</span>
         <span class="sub-val free">Бесплатно</span>
-        <a class="sub-link" href="#">Личный кабинет →</a>
+        <a class="sub-link" href="#">Личный кабинет</a>
       </div>
       <div class="server-row">
         <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
         <span class="srv-name">Франкфурт, Германия</span>
         <span class="srv-arrow off">▾</span>
       </div>
-      <div class="vpn-area"><div class="fab stop">■</div></div>
+      <div class="vpn-area"><div class="vpn-center"><div class="fab stop">■</div><span class="vpn-status">Подключено</span></div></div>
       <div class="sub-block">
         <div class="sub-header">
           <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
-          <span class="sub-chevron">∨</span>
+          <span class="sub-chevron down"></span>
         </div>
         <div class="sub-body">
           <div class="charts-row">
@@ -418,9 +612,19 @@ h1:first-of-type { margin-top: 0; }
             <tr><td class="row-lbl">Серверы</td><td class="f">авто</td><td class="p">на выбор</td></tr>
           </table>
           <button class="btn pay">Оплатить подписку</button>
-          <div class="code-row">
-            <input class="code-input" type="text" placeholder="Ввести код активации">
-            <button class="code-submit">→</button>
+          <div class="activation-section">
+            <span class="code-label">Ввести код активации</span>
+            <div class="code-row">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <button class="code-submit">→</button>
+            </div>
           </div>
         </div>
       </div>
@@ -437,18 +641,18 @@ h1:first-of-type { margin-top: 0; }
       <div class="sub-row">
         <span class="sub-lbl">Подписка:</span>
         <span class="sub-val free">Бесплатно</span>
-        <a class="sub-link" href="#">Личный кабинет →</a>
+        <a class="sub-link" href="#">Личный кабинет</a>
       </div>
       <div class="server-row">
         <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
         <span class="srv-name">Франкфурт, Германия</span>
         <span class="srv-arrow off">▾</span>
       </div>
-      <div class="vpn-area"><div class="fab stop">■</div></div>
+      <div class="vpn-area"><div class="vpn-center"><div class="fab stop">■</div><span class="vpn-status">Подключено</span></div></div>
       <div class="sub-block">
         <div class="sub-header">
           <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
-          <span class="sub-chevron">∨</span>
+          <span class="sub-chevron down"></span>
         </div>
         <div class="sub-body">
           <div class="charts-row">
@@ -494,9 +698,19 @@ h1:first-of-type { margin-top: 0; }
             <tr><td class="row-lbl">Серверы</td><td class="f">авто</td><td class="p">на выбор</td></tr>
           </table>
           <button class="btn pay">Оплатить подписку</button>
-          <div class="code-row">
-            <input class="code-input" type="text" placeholder="Ввести код активации">
-            <button class="code-submit">→</button>
+          <div class="activation-section">
+            <span class="code-label">Ввести код активации</span>
+            <div class="code-row">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <button class="code-submit">→</button>
+            </div>
           </div>
         </div>
       </div>
@@ -513,18 +727,46 @@ h1:first-of-type { margin-top: 0; }
       <div class="sub-row">
         <span class="sub-lbl">Подписка:</span>
         <span class="sub-val free">Бесплатно</span>
-        <a class="sub-link" href="#">Личный кабинет →</a>
+        <a class="sub-link" href="#">Личный кабинет</a>
       </div>
       <div class="server-row">
         <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
         <span class="srv-name">Франкфурт, Германия</span>
         <span class="srv-arrow off">▾</span>
       </div>
-      <div class="vpn-area"><div class="fab stop">■</div></div>
+      <div class="vpn-area"><div class="vpn-center"><div class="fab stop">■</div><span class="vpn-status">Подключено</span></div></div>
       <div class="sub-block">
         <div class="sub-header">
           <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
-          <span class="sub-chevron">∧</span>
+          <span class="sub-chevron up"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④b Free · panel collapsed · traffic warn · VPN on -->
+  <div class="col">
+    <div class="lbl">④b Панель свёрнута · трафик заканчивается (7/25 ГБ) · VPN вкл</div>
+    <div class="phone L">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="sub-row">
+        <span class="sub-lbl">Подписка:</span>
+        <span class="sub-val free">Бесплатно</span>
+        <a class="sub-link" href="#">Личный кабинет</a>
+      </div>
+      <div class="server-row">
+        <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
+        <span class="srv-name">Франкфурт, Германия</span>
+        <span class="srv-arrow off">▾</span>
+      </div>
+      <div class="vpn-area"><div class="vpn-center"><div class="fab stop">■</div><span class="vpn-status">Подключено</span></div></div>
+      <div class="sub-block">
+        <div class="sub-header">
+          <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
+          <span class="sub-traffic-hint warn">7 ГБ</span>
+          <span class="sub-chevron up"></span>
         </div>
       </div>
     </div>
@@ -540,7 +782,7 @@ h1:first-of-type { margin-top: 0; }
       <div class="sub-row">
         <span class="sub-lbl">Подписка:</span>
         <span class="sub-val free">Бесплатно</span>
-        <a class="sub-link" href="#">Личный кабинет →</a>
+        <a class="sub-link" href="#">Личный кабинет</a>
       </div>
       <div class="server-row">
         <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
@@ -548,12 +790,12 @@ h1:first-of-type { margin-top: 0; }
         <span class="srv-arrow off">▾</span>
       </div>
       <div class="vpn-area" style="filter:blur(1.5px);pointer-events:none;">
-        <div class="fab go">▶</div>
+        <div class="vpn-center"><div class="fab go">▶</div><span class="vpn-status">Нажмите для подключения</span></div>
       </div>
       <div class="sub-block" style="filter:blur(1.5px);pointer-events:none;">
         <div class="sub-header">
           <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
-          <span class="sub-chevron">∨</span>
+          <span class="sub-chevron down"></span>
         </div>
         <div class="sub-body" style="padding-bottom:10px;">
           <div class="charts-row">
@@ -623,18 +865,18 @@ h1:first-of-type { margin-top: 0; }
       <div class="sub-row">
         <span class="sub-lbl">Подписка:</span>
         <span class="sub-val ok">15 дней</span>
-        <a class="sub-link" href="#">Личный кабинет →</a>
+        <a class="sub-link" href="#">Личный кабинет</a>
       </div>
       <div class="server-row" style="cursor:pointer;">
         <span class="srv-lbl">Сервер</span><span class="srv-flag">🇳🇱</span>
         <span class="srv-name">Амстердам, Нидерланды</span>
         <span class="srv-arrow on">▾</span>
       </div>
-      <div class="vpn-area"><div class="fab stop">■</div></div>
+      <div class="vpn-area"><div class="vpn-center"><div class="fab stop">■</div><span class="vpn-status">Подключено</span></div></div>
       <div class="sub-block">
         <div class="sub-header">
           <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
-          <span class="sub-chevron">∨</span>
+          <span class="sub-chevron down"></span>
         </div>
         <div class="sub-body">
           <div class="charts-row">
@@ -670,9 +912,19 @@ h1:first-of-type { margin-top: 0; }
             </div>
           </div>
           <button class="btn family">❤ Подключите родных и близких</button>
-          <div class="code-row">
-            <input class="code-input" type="text" placeholder="Ввести код активации">
-            <button class="code-submit">→</button>
+          <div class="activation-section">
+            <span class="code-label">Ввести код активации</span>
+            <div class="code-row">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <button class="code-submit">→</button>
+            </div>
           </div>
         </div>
       </div>
@@ -689,18 +941,18 @@ h1:first-of-type { margin-top: 0; }
       <div class="sub-row">
         <span class="sub-lbl">Подписка:</span>
         <span class="sub-val warn">3 дня</span>
-        <a class="sub-link" href="#">Личный кабинет →</a>
+        <a class="sub-link" href="#">Личный кабинет</a>
       </div>
       <div class="server-row">
         <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
         <span class="srv-name">Франкфурт, Германия</span>
         <span class="srv-arrow off">▾</span>
       </div>
-      <div class="vpn-area"><div class="fab stop">■</div></div>
+      <div class="vpn-area"><div class="vpn-center"><div class="fab stop">■</div><span class="vpn-status">Подключено</span></div></div>
       <div class="sub-block">
         <div class="sub-header">
           <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
-          <span class="sub-chevron">∨</span>
+          <span class="sub-chevron down"></span>
         </div>
         <div class="sub-body">
           <div class="charts-row">
@@ -735,9 +987,19 @@ h1:first-of-type { margin-top: 0; }
             </div>
           </div>
           <button class="btn renew">Продлить подписку</button>
-          <div class="code-row">
-            <input class="code-input" type="text" placeholder="Ввести код активации">
-            <button class="code-submit">→</button>
+          <div class="activation-section">
+            <span class="code-label">Ввести код активации</span>
+            <div class="code-row">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <button class="code-submit">→</button>
+            </div>
           </div>
         </div>
       </div>
@@ -754,18 +1016,18 @@ h1:first-of-type { margin-top: 0; }
       <div class="sub-row">
         <span class="sub-lbl">Подписка:</span>
         <span class="sub-val urgent">1 день</span>
-        <a class="sub-link" href="#">Личный кабинет →</a>
+        <a class="sub-link" href="#">Личный кабинет</a>
       </div>
       <div class="server-row">
         <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
         <span class="srv-name">Франкфурт, Германия</span>
         <span class="srv-arrow off">▾</span>
       </div>
-      <div class="vpn-area"><div class="fab stop">■</div></div>
+      <div class="vpn-area"><div class="vpn-center"><div class="fab stop">■</div><span class="vpn-status">Подключено</span></div></div>
       <div class="sub-block">
         <div class="sub-header">
           <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
-          <span class="sub-chevron">∨</span>
+          <span class="sub-chevron down"></span>
         </div>
         <div class="sub-body">
           <div class="charts-row">
@@ -800,9 +1062,19 @@ h1:first-of-type { margin-top: 0; }
             </div>
           </div>
           <button class="btn renew">Продлить подписку</button>
-          <div class="code-row">
-            <input class="code-input" type="text" placeholder="Ввести код активации">
-            <button class="code-submit">→</button>
+          <div class="activation-section">
+            <span class="code-label">Ввести код активации</span>
+            <div class="code-row">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <button class="code-submit">→</button>
+            </div>
           </div>
         </div>
       </div>
@@ -828,18 +1100,18 @@ h1:first-of-type { margin-top: 0; }
       <div class="sub-row">
         <span class="sub-lbl">Подписка:</span>
         <span class="sub-val free">Бесплатно</span>
-        <a class="sub-link" href="#">Личный кабинет →</a>
+        <a class="sub-link" href="#">Личный кабинет</a>
       </div>
       <div class="server-row">
         <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
         <span class="srv-name">Франкфурт, Германия</span>
         <span class="srv-arrow off">▾</span>
       </div>
-      <div class="vpn-area"><div class="fab go">▶</div></div>
+      <div class="vpn-area"><div class="vpn-center"><div class="fab go">▶</div><span class="vpn-status">Нажмите для подключения</span></div></div>
       <div class="sub-block">
         <div class="sub-header">
           <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
-          <span class="sub-chevron">∨</span>
+          <span class="sub-chevron down"></span>
         </div>
         <div class="sub-body">
           <div class="charts-row">
@@ -884,9 +1156,19 @@ h1:first-of-type { margin-top: 0; }
             <tr><td class="row-lbl">Серверы</td><td class="f">авто</td><td class="p">на выбор</td></tr>
           </table>
           <button class="btn pay">Оплатить подписку</button>
-          <div class="code-row">
-            <input class="code-input" type="text" placeholder="Ввести код активации">
-            <button class="code-submit">→</button>
+          <div class="activation-section">
+            <span class="code-label">Ввести код активации</span>
+            <div class="code-row">
+              <input class="code-field" maxlength="1" value="A">
+              <input class="code-field" maxlength="1" value="B">
+              <input class="code-field" maxlength="1" value="7">
+              <input class="code-field focused" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <button class="code-submit">→</button>
+            </div>
           </div>
         </div>
       </div>
@@ -903,18 +1185,18 @@ h1:first-of-type { margin-top: 0; }
       <div class="sub-row">
         <span class="sub-lbl">Подписка:</span>
         <span class="sub-val free">Бесплатно</span>
-        <a class="sub-link" href="#">Личный кабинет →</a>
+        <a class="sub-link" href="#">Личный кабинет</a>
       </div>
       <div class="server-row">
         <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
         <span class="srv-name">Франкфурт, Германия</span>
         <span class="srv-arrow off">▾</span>
       </div>
-      <div class="vpn-area"><div class="fab stop">■</div></div>
+      <div class="vpn-area"><div class="vpn-center"><div class="fab stop">■</div><span class="vpn-status">Подключено</span></div></div>
       <div class="sub-block">
         <div class="sub-header">
           <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
-          <span class="sub-chevron">∨</span>
+          <span class="sub-chevron down"></span>
         </div>
         <div class="sub-body">
           <div class="charts-row">
@@ -959,9 +1241,19 @@ h1:first-of-type { margin-top: 0; }
             <tr><td class="row-lbl">Серверы</td><td class="f">авто</td><td class="p">на выбор</td></tr>
           </table>
           <button class="btn pay">Оплатить подписку</button>
-          <div class="code-row">
-            <input class="code-input" type="text" placeholder="Ввести код активации">
-            <button class="code-submit">→</button>
+          <div class="activation-section">
+            <span class="code-label">Ввести код активации</span>
+            <div class="code-row">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <button class="code-submit">→</button>
+            </div>
           </div>
         </div>
       </div>
@@ -978,18 +1270,46 @@ h1:first-of-type { margin-top: 0; }
       <div class="sub-row">
         <span class="sub-lbl">Подписка:</span>
         <span class="sub-val free">Бесплатно</span>
-        <a class="sub-link" href="#">Личный кабинет →</a>
+        <a class="sub-link" href="#">Личный кабинет</a>
       </div>
       <div class="server-row">
         <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
         <span class="srv-name">Франкфурт, Германия</span>
         <span class="srv-arrow off">▾</span>
       </div>
-      <div class="vpn-area"><div class="fab stop">■</div></div>
+      <div class="vpn-area"><div class="vpn-center"><div class="fab stop">■</div><span class="vpn-status">Подключено</span></div></div>
       <div class="sub-block">
         <div class="sub-header">
           <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
-          <span class="sub-chevron">∧</span>
+          <span class="sub-chevron up"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑪b Dark · free · panel collapsed · traffic urgent · VPN on -->
+  <div class="col">
+    <div class="lbl">⑪b Тёмная · панель свёрнута · трафик критический (2/25 ГБ) · VPN вкл</div>
+    <div class="phone D">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="sub-row">
+        <span class="sub-lbl">Подписка:</span>
+        <span class="sub-val free">Бесплатно</span>
+        <a class="sub-link" href="#">Личный кабинет</a>
+      </div>
+      <div class="server-row">
+        <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
+        <span class="srv-name">Франкфурт, Германия</span>
+        <span class="srv-arrow off">▾</span>
+      </div>
+      <div class="vpn-area"><div class="vpn-center"><div class="fab stop">■</div><span class="vpn-status">Подключено</span></div></div>
+      <div class="sub-block">
+        <div class="sub-header">
+          <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
+          <span class="sub-traffic-hint urgent">2 ГБ</span>
+          <span class="sub-chevron up"></span>
         </div>
       </div>
     </div>
@@ -1014,18 +1334,18 @@ h1:first-of-type { margin-top: 0; }
       <div class="sub-row">
         <span class="sub-lbl">Подписка:</span>
         <span class="sub-val ok">15 дней</span>
-        <a class="sub-link" href="#">Личный кабинет →</a>
+        <a class="sub-link" href="#">Личный кабинет</a>
       </div>
       <div class="server-row" style="cursor:pointer;">
         <span class="srv-lbl">Сервер</span><span class="srv-flag">🇳🇱</span>
         <span class="srv-name">Амстердам, Нидерланды</span>
         <span class="srv-arrow on">▾</span>
       </div>
-      <div class="vpn-area"><div class="fab go">▶</div></div>
+      <div class="vpn-area"><div class="vpn-center"><div class="fab go">▶</div><span class="vpn-status">Нажмите для подключения</span></div></div>
       <div class="sub-block">
         <div class="sub-header">
           <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
-          <span class="sub-chevron">∨</span>
+          <span class="sub-chevron down"></span>
         </div>
         <div class="sub-body">
           <div class="charts-row">
@@ -1059,9 +1379,19 @@ h1:first-of-type { margin-top: 0; }
             </div>
           </div>
           <button class="btn family">❤ Подключите родных и близких</button>
-          <div class="code-row">
-            <input class="code-input" type="text" placeholder="Ввести код активации">
-            <button class="code-submit">→</button>
+          <div class="activation-section">
+            <span class="code-label">Ввести код активации</span>
+            <div class="code-row">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <button class="code-submit">→</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1078,18 +1408,18 @@ h1:first-of-type { margin-top: 0; }
       <div class="sub-row">
         <span class="sub-lbl">Подписка:</span>
         <span class="sub-val warn">3 дня</span>
-        <a class="sub-link" href="#">Личный кабинет →</a>
+        <a class="sub-link" href="#">Личный кабинет</a>
       </div>
       <div class="server-row">
         <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
         <span class="srv-name">Франкфурт, Германия</span>
         <span class="srv-arrow off">▾</span>
       </div>
-      <div class="vpn-area"><div class="fab stop">■</div></div>
+      <div class="vpn-area"><div class="vpn-center"><div class="fab stop">■</div><span class="vpn-status">Подключено</span></div></div>
       <div class="sub-block">
         <div class="sub-header">
           <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
-          <span class="sub-chevron">∨</span>
+          <span class="sub-chevron down"></span>
         </div>
         <div class="sub-body">
           <div class="charts-row">
@@ -1123,9 +1453,19 @@ h1:first-of-type { margin-top: 0; }
             </div>
           </div>
           <button class="btn renew">Продлить подписку</button>
-          <div class="code-row">
-            <input class="code-input" type="text" placeholder="Ввести код активации">
-            <button class="code-submit">→</button>
+          <div class="activation-section">
+            <span class="code-label">Ввести код активации</span>
+            <div class="code-row">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <button class="code-submit">→</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1142,18 +1482,18 @@ h1:first-of-type { margin-top: 0; }
       <div class="sub-row">
         <span class="sub-lbl">Подписка:</span>
         <span class="sub-val urgent">1 день</span>
-        <a class="sub-link" href="#">Личный кабинет →</a>
+        <a class="sub-link" href="#">Личный кабинет</a>
       </div>
       <div class="server-row">
         <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
         <span class="srv-name">Франкфурт, Германия</span>
         <span class="srv-arrow off">▾</span>
       </div>
-      <div class="vpn-area"><div class="fab stop">■</div></div>
+      <div class="vpn-area"><div class="vpn-center"><div class="fab stop">■</div><span class="vpn-status">Подключено</span></div></div>
       <div class="sub-block">
         <div class="sub-header">
           <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
-          <span class="sub-chevron">∨</span>
+          <span class="sub-chevron down"></span>
         </div>
         <div class="sub-body">
           <div class="charts-row">
@@ -1187,9 +1527,19 @@ h1:first-of-type { margin-top: 0; }
             </div>
           </div>
           <button class="btn renew">Продлить подписку</button>
-          <div class="code-row">
-            <input class="code-input" type="text" placeholder="Ввести код активации">
-            <button class="code-submit">→</button>
+          <div class="activation-section">
+            <span class="code-label">Ввести код активации</span>
+            <div class="code-row">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <input class="code-field" maxlength="1" placeholder="×">
+              <button class="code-submit">→</button>
+            </div>
           </div>
         </div>
       </div>

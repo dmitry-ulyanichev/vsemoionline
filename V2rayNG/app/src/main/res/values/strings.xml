@@ -413,7 +413,7 @@
     <string name="vsm_toolbar_title">Все Мои Онлайн</string>
     <string name="vsm_sub_label">Подписка:</string>
     <string name="vsm_sub_free">Бесплатно</string>
-    <string name="vsm_cabinet_link">Личный кабинет →</string>
+    <string name="vsm_cabinet_link">Личный кабинет</string>
 
     <!-- VseMoiOnline: Server row -->
     <string name="vsm_server_label">Сервер</string>
@@ -461,5 +461,12 @@
         <item quantity="many">%d дней</item>
         <item quantity="other">%d дней</item>
     </plurals>
+
+    <!-- VseMoiOnline: VPN status label -->
+    <string name="vpn_connected">Подключено</string>
+    <string name="vpn_disconnected">Нажмите для подключения</string>
+    <string name="vpn_connecting">Подключение…</string>
+    <string name="vpn_blocked_days">Оплатите подписку</string>
+    <string name="vpn_blocked_traffic">Трафик исчерпан</string>
 
 </resources>

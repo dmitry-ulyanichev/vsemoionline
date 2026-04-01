@@ -18,6 +18,9 @@
     <color name="vsm_sub_ok">#81C784</color>
     <color name="vsm_sub_warn">#FFB74D</color>
     <color name="vsm_sub_urgent">#EF9A9A</color>
+    <color name="vsm_sub_urgent_hi">#FF8A80</color>
     <color name="vsm_link">#90CAF9</color>
     <color name="vsm_hint_text">#546E7A</color>
+    <color name="vsm_pill_stroke">#33A8D0F8</color>
+    <color name="vsm_pill_fill">#1190CAF9</color>
 </resources>

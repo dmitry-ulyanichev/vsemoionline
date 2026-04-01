@@ -14,7 +14,7 @@
 
     <!-- VseMoiOnline brand palette -->
     <color name="vsm_toolbar">#1F2344</color>
-    <color name="vsm_surface">#FFFFFF</color>
+    <color name="vsm_surface">#FAFBFC</color>
     <color name="vsm_surface2">#F5F5F5</color>
     <color name="vsm_border">#E0E0E0</color>
     <color name="vsm_ring_bg">#E8EAF6</color>
@@ -22,6 +22,7 @@
     <color name="vsm_sub_ok">#2E7D32</color>
     <color name="vsm_sub_warn">#E65100</color>
     <color name="vsm_sub_urgent">#C62828</color>
+    <color name="vsm_sub_urgent_hi">#FF5252</color>
     <color name="vsm_link">#1565C0</color>
 
     <!-- VseMoiOnline universal (same light + dark) -->
@@ -34,4 +35,5 @@
     <color name="vsm_speed_blue">#1E88E5</color>
     <color name="vsm_pay_btn">#1565C0</color>
     <color name="vsm_hint_text">#9E9E9E</color>
+    <color name="vsm_pill_stroke">#33356CCC</color>
 </resources>

@@ -66,15 +66,23 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/vsm_cabinet_link"
-                android:textSize="12sp"
-                android:textColor="@color/vsm_link" />
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:textColor="@color/vsm_link"
+                android:paddingStart="9dp"
+                android:paddingEnd="6dp"
+                android:paddingTop="3dp"
+                android:paddingBottom="3dp"
+                android:background="@drawable/pill_link_bg"
+                android:drawableEnd="@drawable/ic_chevron_right_small"
+                android:drawablePadding="2dp" />
 
         </LinearLayout>
 
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="@color/vsm_border" />
+            android:background="@drawable/divider_fade" />
 
         <!-- ── Server row (46dp) ────────────────────────── -->
         <LinearLayout
@@ -113,14 +121,13 @@
                 android:textSize="15sp"
                 android:textColor="?android:textColorPrimary" />
 
-            <TextView
+            <ImageView
                 android:id="@+id/tv_server_arrow"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="▾"
-                android:textSize="12sp"
+                android:layout_width="11dp"
+                android:layout_height="11dp"
                 android:layout_marginStart="4dp"
-                android:textColor="@color/vsm_border" />
+                android:src="@drawable/ic_chevron_down"
+                android:contentDescription="" />
 
         </LinearLayout>
 
@@ -136,6 +143,7 @@
             android:layout_height="0dp"
             android:layout_weight="1"
             android:background="@color/vsm_surface2"
+            android:clipChildren="false"
             android:minHeight="120dp">
 
             <!-- Progress bar docked at top -->
@@ -148,20 +156,58 @@
                 android:visibility="invisible"
                 app:indicatorColor="@color/vsm_mint" />
 
-            <!-- FAB centered in the VPN area -->
-            <com.google.android.material.floatingactionbutton.FloatingActionButton
-                android:id="@+id/fab"
+            <!-- FAB + status label grouped so they move together -->
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:clickable="true"
-                android:focusable="true"
-                android:contentDescription="@string/tasker_start_service"
-                android:src="@drawable/ic_play_24dp"
-                android:visibility="visible"
-                app:fabCustomSize="88dp"
-                app:maxImageSize="40dp"
-                app:backgroundTint="@color/vsm_mint" />
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:clipChildren="false">
+
+                <!-- FrameLayout keeps halo behind FAB -->
+                <FrameLayout
+                    android:layout_width="116dp"
+                    android:layout_height="116dp"
+                    android:clipChildren="false">
+
+                    <View
+                        android:id="@+id/fab_halo"
+                        android:layout_width="116dp"
+                        android:layout_height="116dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/fab_halo"
+                        android:elevation="0dp"
+                        android:alpha="0" />
+
+                    <com.google.android.material.floatingactionbutton.FloatingActionButton
+                        android:id="@+id/fab"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:contentDescription="@string/tasker_start_service"
+                        android:src="@drawable/ic_power"
+                        android:visibility="visible"
+                        app:fabCustomSize="88dp"
+                        app:maxImageSize="40dp"
+                        app:backgroundTint="@color/vsm_traffic_green"
+                        app:tint="@android:color/white" />
+
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/tv_vpn_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:textSize="13sp"
+                    android:letterSpacing="0.04"
+                    android:textColor="?android:textColorSecondary"
+                    android:text="@string/vpn_disconnected" />
+
+            </LinearLayout>
 
             <!-- Hidden V2rayNG internals — kept for binding/adapter/ViewModel wiring -->
             <com.google.android.material.tabs.TabLayout
@@ -203,6 +249,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
+            android:clipChildren="false"
             android:background="@color/vsm_surface">
 
             <View
@@ -234,12 +281,20 @@
                     android:textColor="?android:textColorHint" />
 
                 <TextView
-                    android:id="@+id/tv_sub_chevron"
+                    android:id="@+id/tv_sub_traffic_hint"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="∨"
-                    android:textSize="12sp"
-                    android:textColor="?android:textColorHint" />
+                    android:layout_marginEnd="10dp"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+
+                <ImageView
+                    android:id="@+id/tv_sub_chevron"
+                    android:layout_width="14dp"
+                    android:layout_height="14dp"
+                    android:src="@drawable/ic_chevron_down"
+                    android:contentDescription="" />
 
             </LinearLayout>
 
@@ -249,6 +304,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
+                android:clipChildren="false"
+                android:clipToPadding="false"
                 android:paddingStart="@dimen/padding_spacing_dp16"
                 android:paddingEnd="@dimen/padding_spacing_dp16"
                 android:paddingTop="6dp"
@@ -538,18 +595,33 @@
                 </LinearLayout>
 
                 <!-- Оплатить подписку — free user, always visible initially -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_pay"
+                <!-- FrameLayout owns gradient + shadow; clipToOutline clips button to rounded corners -->
+                <FrameLayout
+                    android:id="@+id/btn_pay_container"
                     android:layout_width="match_parent"
                     android:layout_height="48dp"
                     android:layout_marginTop="11dp"
-                    android:text="@string/vsm_btn_pay"
-                    android:textSize="15sp"
-                    android:textStyle="bold"
-                    android:textColor="@android:color/white"
-                    app:cornerRadius="8dp"
-                    app:backgroundTint="@color/vsm_pay_btn"
-                    app:strokeWidth="0dp" />
+                    android:background="@drawable/btn_pay_bg"
+                    android:elevation="6dp"
+                    android:clipToOutline="true">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_pay"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:text="@string/vsm_btn_pay"
+                        android:textSize="15sp"
+                        android:textStyle="bold"
+                        android:textColor="@android:color/white"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:stateListAnimator="@null"
+                        app:cornerRadius="0dp"
+                        app:backgroundTint="@android:color/transparent"
+                        app:rippleColor="#40FFFFFF"
+                        app:strokeWidth="0dp" />
+
+                </FrameLayout>
 
                 <!-- ❤ Подключите родных и близких — paid, days > 3, initially GONE -->
                 <com.google.android.material.button.MaterialButton
@@ -562,10 +634,10 @@
                     android:textSize="15sp"
                     android:textStyle="bold"
                     android:textColor="#2E7D32"
-                    app:cornerRadius="8dp"
+                    app:cornerRadius="10dp"
                     app:strokeWidth="1.5dp"
-                    app:strokeColor="#A5D6A7"
-                    app:backgroundTint="#E8F5E9"
+                    app:strokeColor="#46367D32"
+                    app:backgroundTint="@android:color/transparent"
                     android:visibility="gone" />
 
                 <!-- Продлить подписку — paid, days ≤ 3, initially GONE -->
@@ -579,10 +651,10 @@
                     android:textSize="15sp"
                     android:textStyle="bold"
                     android:textColor="#E65100"
-                    app:cornerRadius="8dp"
+                    app:cornerRadius="10dp"
                     app:strokeWidth="1.5dp"
-                    app:strokeColor="#FFCC80"
-                    app:backgroundTint="#FFF3E0"
+                    app:strokeColor="#38E65100"
+                    app:backgroundTint="@android:color/transparent"
                     android:visibility="gone" />
 
                 <!-- Activation success flash (shown briefly after code accepted, then auto-hides) -->
@@ -602,7 +674,9 @@
                     android:id="@+id/layout_activation_section"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical">
+                    android:orientation="vertical"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
 
                 <TextView
                     android:layout_width="match_parent"
@@ -618,7 +692,9 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
                     android:orientation="horizontal"
-                    android:gravity="center_vertical">
+                    android:gravity="center_vertical"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
 
                     <!-- 8 single-char code fields with hyphen separator -->
                     <EditText
@@ -773,20 +849,35 @@
                         android:hint="×"
                         android:textColorHint="#80AAAAAA" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_code_submit"
+                    <FrameLayout
                         android:layout_width="44dp"
                         android:layout_height="44dp"
                         android:layout_marginStart="8dp"
-                        android:text="→"
-                        android:textSize="20sp"
-                        android:textColor="@android:color/white"
-                        android:enabled="false"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        app:cornerRadius="8dp"
-                        app:backgroundTint="@color/vsm_mint"
-                        app:strokeWidth="0dp" />
+                        android:background="@drawable/btn_submit_bg"
+                        android:elevation="4dp"
+                        android:clipToOutline="true">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_code_submit"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:enabled="false"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:stateListAnimator="@null"
+                            app:icon="@drawable/ic_arrow_right"
+                            app:iconSize="22dp"
+                            app:iconPadding="0dp"
+                            app:iconGravity="textStart"
+                            app:iconTint="@android:color/white"
+                            app:cornerRadius="0dp"
+                            app:backgroundTint="@android:color/transparent"
+                            app:rippleColor="#40FFFFFF"
+                            app:strokeWidth="0dp" />
+
+                    </FrameLayout>
 
                 </LinearLayout>
 
@@ -803,8 +894,10 @@
         android:layout_width="wrap_content"
         android:layout_height="match_parent"
         android:layout_gravity="start"
+        android:background="@color/vsm_surface"
         app:headerLayout="@layout/nav_header"
-        app:itemIconTint="@color/colorAccent"
+        app:itemIconTint="@color/vsm_link"
+        app:itemTextColor="?android:textColorPrimary"
         app:menu="@menu/menu_drawer" />
 
 </androidx.drawerlayout.widget.DrawerLayout>

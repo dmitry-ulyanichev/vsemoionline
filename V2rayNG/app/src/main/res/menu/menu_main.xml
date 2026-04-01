@@ -1,9 +1,2 @@
 <?xml version="1.0" encoding="utf-8"?>
-<menu xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto">
-    <item
-        android:id="@+id/service_restart"
-        android:icon="@drawable/ic_refresh_24dp"
-        android:title="@string/title_service_restart"
-        app:showAsAction="never" />
-</menu>
+<menu xmlns:android="http://schemas.android.com/apk/res/android" />

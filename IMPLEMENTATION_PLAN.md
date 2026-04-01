@@ -80,10 +80,10 @@ Serve as static/template HTML from Client Backend. Must work on old Android WebV
 - `/payment/cancel` — abandoned payment page
 - `/activate` — deep link landing
 
-### 1.5 APK Download Endpoint
+### 1.5 APK Download Endpoint ✅
 
-- `GET /download/apk` — serves APK with `Content-Type: application/vnd.android.package-archive`.
-- APK stored on server filesystem, not in git.
+- ✅ `GET /download/apk` — serves APK with `Content-Type: application/vnd.android.package-archive`.
+- APK stored at `/opt/vsemoi/vsemoivpn.apk` on the host, mounted read-only into the container via `docker-compose.yml` volumes. Not in git.
 
 ### 1.6 Xray gRPC Client ✅
 
@@ -92,37 +92,42 @@ Thin gRPC client (used by Client Backend, reused by Orchestrator in Phase 2):
 - ✅ Remove UUID from inbound
 - ✅ Query inbound stats — `getUserTrafficBytes(xrayUuid)` fetches uplink + downlink via `StatsService/GetStats`, handles gRPC NOT_FOUND (code 5) as zero traffic. Wired into `/status` as `traffic_consumed_mb` (bytes ÷ 1 048 576). Android client reads `traffic_cap_mb` from response (÷ 1000 → GB) and saves to `PREF_TRAFFIC_TOTAL_GB`; falls back to 25 GB / 250 GB if field absent. Backend defaults corrected to 25 000 MB (free) / 250 000 MB (paid).
 
-### 1.7 tc Agent Implementation
+### 1.7 tc Agent Implementation ✅
 
 Runs on Xray VPS host as a systemd service (not in Docker — intentional):
-- `POST /throttle` with `{ port, rate_kbps }` → applies tc rule to that port (replaces any existing rule for same port)
-- `DELETE /throttle/:port` → removes tc rule for that port
-- `GET /throttle/:port` → returns `{ port, rate_kbps }` (live read from `tc class show`; `null` if no rule set) ✅
-- Idempotent: double-application does not stack rules
-- Binds to `0.0.0.0`; requires shared secret in `x-agent-secret` header for all endpoints
-- When backend runs in Docker on the same host: add iptables rule to allow the Docker bridge interface to reach port 9000 (`iptables -I INPUT -i <br-xxx> -p tcp --dport 9000 -j ACCEPT`)
-- Translates to the exact tc commands documented in Phase 0 runbook
+- ✅ `POST /throttle` with `{ port, rate_kbps }` → applies tc rule to that port (replaces any existing rule for same port)
+- ✅ `DELETE /throttle/:port` → removes tc rule for that port
+- ✅ `GET /throttle/:port` → returns `{ port, rate_kbps }` (live read from `tc class show`; `null` if no rule set)
+- ✅ Idempotent: double-application does not stack rules
+- ✅ Binds to `0.0.0.0`; requires shared secret in `x-agent-secret` header for all endpoints
+- ✅ Docker bridge iptables rule in place (`iptables -I INPUT -i br-xxx -p tcp --dport 9000 -j ACCEPT`)
+- Bootstrap throttle rules applied at startup from `/etc/tc-agent.env` (`FREE_TIER_PORT=8444`, `FREE_TIER_RATE_KBPS=2800`)
 
 ### 1.8 Throttling Integration
 
-- The tc agent applies the free-tier rate limit to the free inbound port at server bootstrap time, not per device. The Orchestrator adjusts the rate via the agent when the configured throttle value changes.
-- Throttle rate is a config value, not hardcoded.
-- Manual `DELETE /throttle/:uuid` simulates an upgrade (used for testing before Phase 3).
-- ✅ `/status` returns the **live** `throttle_mbps` by querying `GET /throttle/:port` on the tc-agent for the device's tier port. Falls back to env-var default if tc-agent is unreachable.
-- ✅ Bootstrap throttle applied at agent startup via `FREE_TIER_PORT` / `FREE_TIER_RATE_KBPS` env vars in `/etc/tc-agent.env`. Survives reboots.
-- **Multi-server TODO**: `TC_AGENT_URL` is currently a single env var (single-server PoC). When multiple Xray VPSes are added, `status.js` must look up `servers.tc_agent_url` by `devices.assigned_server_id` instead.
+- ✅ The tc agent applies the free-tier rate limit to the free inbound port at server bootstrap time, not per device.
+- ✅ Throttle rate is a config value (`FREE_TIER_RATE_KBPS`), not hardcoded.
+- ✅ `/status` returns the **live** `throttle_mbps` by querying `GET /throttle/:port` on the tc-agent. Falls back to env-var default if tc-agent is unreachable.
+- ✅ Bootstrap throttle applied at agent startup via `/etc/tc-agent.env`. Survives reboots.
+- ✅ `POST /admin/throttle` on the client-backend — operator can update the free/paid tier throttle without SSH. Protected by `ADMIN_SECRET` header. Body: `{ tier, rate_kbps }`.
+- **Multi-server TODO (Phase 2)**: `TC_AGENT_URL` is currently a single env var (single-server PoC). When multiple Xray VPSes are added, `status.js` and `admin.js` must look up `servers.tc_agent_url` by `devices.assigned_server_id` instead.
 
-### 1.9 Caddy Configuration
+### 1.9 Nginx Reverse Proxy + TLS ✅
 
-- Reverse proxy in front of Client Backend with automatic HTTPS.
-- Set `X-Forwarded-For` correctly (needed for abuse detection).
-- Route `/download/apk` to APK file.
+The VPS runs nginx (host process) which was already managing other sites. Caddy was ruled out to avoid port conflicts.
 
-### 1.10 Swarm Deployment Stack
+- ✅ `infra/nginx/vmonl.store.conf` — server block proxying `vmonl.store` → `http://127.0.0.1:3000` with correct `X-Forwarded-For` headers.
+- ✅ TLS via Let's Encrypt / certbot (`--nginx` driver). Cert auto-renews.
+- ✅ `.github/workflows/nginx.yml` — deploys config to `/etc/nginx/sites-enabled/` and runs certbot on first deploy.
 
-`infra/swarm-stack.yml` deploying: Caddy, Client Backend, Postgres, Redis (wired in now even though Phase 2 uses it — avoids infrastructure changes later).
+### 1.10 Docker Compose Deployment ✅
 
-Use Swarm secrets for: Postgres password, Xray gRPC auth token, tc agent shared secret.
+No Docker Swarm — single VPS at this stage. Services managed by `docker-compose.yml` + per-service GitHub Actions workflows (self-hosted runner on the VPS).
+
+- ✅ Services: `postgres`, `redis`, `client-backend`, `xray`
+- ✅ Secrets via files in `/opt/actions-runner-vsemoi/env/` (outside git)
+- ✅ Workflows: `infrastructure.yml`, `client-backend.yml`, `xray.yml`, `nginx.yml`
+- Swarm migration deferred to Phase 2 if/when multi-node is needed.
 
 ### 1.11 Android Client Updates
 
@@ -131,13 +136,22 @@ Use Swarm secrets for: Postgres password, Xray gRPC auth token, tc agent shared 
 - Implement deep link handler for `vsemoionline://activate?token=ABC123`.
 - Implement domain fallback chain: last known → hardcoded → Gist/Worker → magic link.
 - Client UI elements:
-  - ✅ Subscription header: "Подписка: Бесплатно" or "Подписка: N дней" (orange at 2–5 days, red+blinking at 1 day)
-  - ✅ VPN on/off FAB (mint ▶ / red ■)
-  - ✅ Server row with flag + city; free-user tap → AlertDialog + pay button highlight
-  - ✅ Traffic donut chart + speed donut chart (values from `/status` poll every 45s)
+  - ✅ Subscription header: "Подписка: Бесплатно" or "Подписка: N дней" (orange at 2–5 days, red pulse at ≤ 3 days)
+  - ✅ VPN on/off FAB: power icon, green idle / red connected + halo pulse; grey + block reason when quota/days exhausted
+  - ✅ VPN status label below FAB: "Нажмите для подключения" / "Подключено" / block reason strings
+  - ✅ Connection blocking: FAB tap blocked with toast when `paid_days_remaining == 0` or `traffic_remaining_gb <= 0`
+  - ✅ Server row with flag + city; free-user tap → AlertDialog + pay button highlight; server arrow is `ImageView` (green paid / grey free)
+  - ✅ Traffic donut chart + speed donut chart (values from `/status` poll every 45s); speed ring red+0.0 when traffic exhausted
   - ✅ "Оплатить подписку" button + 8-field activation code input (free users)
-  - ✅ "Подключите родных и близких" / "Продлить подписку" button (paid users)
-  - ✅ Collapsible "УПРАВЛЕНИЕ ПОДПИСКОЙ" block with comparison table
+  - ✅ "Продлить подписку" button with urgent pulse animation when ≤ 3 days or < 10 % traffic (paid users)
+  - ✅ "Подключите родных и близких" button (comfortable paid users)
+  - ✅ Collapsible "УПРАВЛЕНИЕ ПОДПИСКОЙ" block with comparison table; chevron rotates 200 ms on expand/collapse
+  - ✅ Collapsed hint badge (`tv_sub_traffic_hint`): shows days/traffic warning when block is collapsed
+  - ✅ Comparison table free-traffic cell wired dynamically to `PREF_TRAFFIC_TOTAL_GB` (from `traffic_cap_mb` in `/status`)
+  - ✅ "Оплатить подписку", "Продлить подписку", "Личный кабинет" buttons open `cabinet_url` from backend; cabinet link hidden for free users
+  - ✅ Animated toolbar/VPN area backgrounds (colour-cycling via `ValueAnimator.ofArgb`)
+  - ✅ App-open status refresh rate-limited to 30 min (`PREF_LAST_STATUS_POLL_MS`)
+- ✅ `POST /admin/token` on client-backend — operator generates single-use activation tokens without DB access. Body: `{ xray_uuid, days, expires_hours? }`. Returns `token`, `activation_url`, `expires_at`.
 
 **Testable when**: Fresh device installs APK → calls `/provision` → gets throttled free-tier config → connects → browses at reduced speed. Operator issues token → deep link sent → user taps → account upgrades to paid → unthrottled.
 
@@ -149,59 +163,86 @@ Use Swarm secrets for: Postgres password, Xray gRPC auth token, tc agent shared 
 
 ### Dependencies
 - Phase 1 fully deployed and stable.
-- Kamatera API access confirmed (manually provision a VPS first before automating).
-- Cloudflare DNS API access confirmed.
+- Kamatera API access confirmed (manually provision a VPS first before automating). ✅
+- Cloudflare DNS API: not needed. Replacement domains are pre-bought with A records already pointing at the VPS. Rotation only requires updating the Gist and DB. ✅
 - Redis pub/sub topic schema agreed before writing either service.
 
-### 2.1 Redis Event Schema
+### 2.1 Server State Model
 
-Contract between Health Monitor and Orchestrator:
+Traffic is the primary resource per server, not CPU/RAM. Each Kamatera monthly server includes 5TB traffic; overage is expensive.
+
+| State | Meaning | New user assignments |
+|---|---|---|
+| `active` | Healthy, traffic below threshold | Yes |
+| `draining` | Traffic ≥ 90% of cap (TRAFFIC_CAP_THRESHOLD_PCT=90) | No — keep existing users connected |
+| `exhausted` | Traffic cap hit (100%) | No — kill switch: refuse new VPN connections |
+| `unreachable` | TCP/HTTP probe fails | No — emergency drain + replace |
+| `dead` | Terminated | — |
+
+**Traffic tracking**: Xray gRPC stats (summed per server). Kamatera's billing API does not provide live traffic data or overage signals — we own cap enforcement entirely.
+
+**Monthly reset**: Kamatera resets traffic on the server's billing anniversary (day of month it was provisioned), not on the calendar 1st. Store `traffic_resets_at` in the `servers` table (computed from `created_at`). Health Monitor resets the traffic counter and flips `exhausted` → `active` on this date.
+
+**Exhausted servers**: keep alive until `traffic_resets_at` (already paid for the month). Only decommission if also `unreachable`.
+
+**Schema addition**: `servers` table needs `traffic_cap_mb` (default 5 120 000), `traffic_used_mb`, `traffic_resets_at`.
+
+### 2.2 Redis Event Schema
+
+Contract between Health Monitor and Orchestrator. Events fire on state **transitions** only — not on every check.
 
 | Topic | Payload |
 |---|---|
-| `server.unhealthy` | `{ server_id, reason, timestamp }` |
+| `server.unreachable` | `{ server_id, reason, timestamp }` |
 | `server.healthy` | `{ server_id, timestamp }` |
-| `server.overloaded` | `{ server_id, connection_count, threshold, timestamp }` |
+| `server.draining` | `{ server_id, traffic_used_mb, cap_mb, timestamp }` |
+| `server.exhausted` | `{ server_id, timestamp }` |
+| `server.traffic_reset` | `{ server_id, timestamp }` |
 | `domain.unreachable` | `{ domain_id, domain, timestamp }` |
 | `domain.rotated` | `{ old_domain, new_domain, server_id, timestamp }` |
+| `domain.rotate` | `{ server_id, reason, timestamp }` ← manual admin trigger |
 
-Events fire on state **transitions** only — not on every check. This prevents event storms.
+### 2.3 Health Monitor
 
-### 2.2 Health Monitor
+Build second (after Orchestrator domain rotation is working).
 
-- **Server checks**: TCP connect + HTTP probe to each active server's Xray port every 30s.
-- **Domain checks**: HTTP probe with body token verification (detect hijacking, not just 200).
-- **Metrics**: Pull connection counts from Xray gRPC stats, write to `server_metrics`.
-- **Startup**: Treat all servers as unknown on start; require 2 consecutive positive checks before declaring healthy.
-- **Publishing**: On transition, publish to Redis. Debounce: do not publish the same state twice.
+- **Server reachability**: TCP connect + HTTP probe to each active server's Xray port every 30s. Require 2 consecutive failures before publishing `server.unreachable`; require 2 consecutive successes before publishing `server.healthy`.
+- **Traffic checks**: Sum Xray gRPC user stats per server every 5 min; update `server_metrics` and `servers.traffic_used_mb`. Publish `server.draining` at 90%, `server.exhausted` at 100%.
+- **Monthly reset**: On `traffic_resets_at`, zero out `traffic_used_mb`, publish `server.traffic_reset`, flip state to `active`.
+- **Domain checks**: HTTP probe with body token verification (detects hijacking, not just 200 OK).
+- **No CPU/RAM monitoring** in Phase 2 — traffic cap is the binding constraint on Type-A servers.
 
-### 2.3 Orchestrator: Domain Rotation
+### 2.4 Orchestrator: Domain Rotation
 
-Implement first (testable without Kamatera):
-- Subscribe to `domain.unreachable`.
-- Pick new domain from pool or generate new subdomain.
-- Update DNS via Cloudflare API.
-- Update `domain_names` table.
-- Update GitHub Gist / Cloudflare Worker fallback URL.
+Build first (testable without Kamatera or Health Monitor — use manual admin trigger).
+
+- Subscribe to `domain.unreachable` (from Health Monitor) and `domain.rotate` (manual admin trigger via `POST /admin/rotate-domain`).
+- Pick next domain from pool in `domain_names` table (status = 'standby'). All standby domains are pre-bought with A records already pointing at the VPS — no DNS API call needed.
+- Mark old domain `dead`, new domain `active` in `domain_names`.
+- Update GitHub Gist with new domain URL.
 - Publish `domain.rotated`.
-- Add `current_domain` to `/status` response so clients pick up the change on next poll.
-- Cooldown: no more than one rotation per server per N minutes.
+- `/status` already returns `current_domain` — clients pick it up on next poll.
+- Cooldown: no more than one rotation per server per `DOMAIN_ROTATION_COOLDOWN_MINUTES` (env var).
 
-### 2.4 Orchestrator: Server Scaling
+### 2.5 Orchestrator: Server Scaling
 
-Implement second:
-- Subscribe to `server.overloaded` (provision new server) and `server.unhealthy` (drain + replace).
-- On provision: call Kamatera API, run bootstrap script, register in `servers` table.
-- Bootstrap script: installs Docker, deploys Xray container, installs tc agent. Must be idempotent. Test manually before automating.
-- On drain: update device assignments in DB → affected clients get new server on next `/status` poll.
+Build third (after Health Monitor).
+
+- Subscribe to `server.draining` (provision additional server) and `server.unreachable` (drain + replace).
+- On provision: call Kamatera API (Bearer token auth — exchange clientId+secret via POST /authenticate first), run bootstrap script, register in `servers` table with `traffic_resets_at` = provisioned_at + 1 month.
+- Bootstrap script: installs Docker, deploys Xray container, installs tc agent. Must be idempotent. **Test manually before automating.**
+- On drain: reassign devices in DB → affected clients get new server on next `/status` poll.
+- On `server.exhausted`: no new provisioning — server idles until `server.traffic_reset`.
 - **Provider abstraction layer**: `providers/kamatera.js` implements `{ provisionServer, terminateServer, listServers }`. Core orchestration logic never imports Kamatera directly.
 
-### 2.5 Swarm Multi-Node Prep
+### 2.6 Swarm Multi-Node Prep
 
 - Add placement constraints to `swarm-stack.yml` so Xray containers are pinned to their VPS nodes by label.
 - tc agent installation is part of the server bootstrap script (not Swarm-managed).
 
-**Testable when**: Kill an Xray container → Health Monitor detects → Orchestrator marks unhealthy → clients receive new server address on next poll → traffic resumes. Make a domain unreachable → DNS rotates → Gist updated. Lower overload threshold → new Kamatera VPS auto-provisions.
+**Build order**: Orchestrator domain rotation → Health Monitor → Orchestrator server scaling.
+
+**Testable when**: Trigger `POST /admin/rotate-domain` → Gist updated → client picks up new domain on next poll. Kill an Xray container → Health Monitor detects → Orchestrator drains → clients get new server. Server hits 90% traffic → `server.draining` → new Kamatera VPS provisions.
 
 ---
 
@@ -240,7 +281,33 @@ Complete the placeholder pages from Phase 1 with real YooKassa redirect flow. Pa
 - If conflict: return error; Android client displays localized message to user.
 - This is a heuristic, not a cryptographic lock — document the limitation.
 
-### 3.5 Telegram Bot
+### 3.5 Subscription Recovery ("Восстановить подписку")
+
+**Context**: A paid user on a new phone (different `android_id`) has no automatic recovery path. Activation codes alone cannot be used for recovery — they are single-use and code-only re-activation would allow takeover if the code is leaked. Email OTP is required as a second factor.
+
+**Prerequisites**: email collected and stored in `accounts` at payment time (Phase 3.1 webhook must save it).
+
+**Recovery ladder**:
+1. Same-device reinstall/clear-data → automatic via `android_id` dedup in `/provision` (no user action needed)
+2. New phone / factory reset → "Восстановить подписку" email OTP flow (this section)
+3. Email forgotten / inaccessible → Telegram support → operator issues new token via `POST /admin/token`
+
+**Android**: Add "Восстановить подписку" item to `menu_drawer.xml`. On tap: open `https://vmonl.store/restore` in browser (no new Activity needed — `Utils.openUri`).
+
+**Backend endpoints**:
+- `GET /restore` — HTML page with email input field
+- `POST /restore/send-code` — look up account by email; generate 4-digit OTP (short expiry, e.g. 10 min); send via email provider (Resend / Mailgun)
+- `POST /restore/verify` — validate OTP + `device_fingerprint` from body; reassign device to the account found by email; return success page
+
+**Security constraints**:
+- OTP is 4 digits, expires in 10 min, single-use
+- Rate-limit `/restore/send-code` per email (e.g. 3 attempts / 15 min)
+- Account reassignment (moving a device to a different account) must only happen via this verified flow — never via activation code alone
+- Log all reassignment events with old/new `account_id` and `device_fingerprint`
+
+**UX**: Two-step flow max — enter email → enter 4-digit code → done. No magic links (seniors struggle with cross-app flows).
+
+### 3.6 Telegram Bot
 
 **Operator commands** (restricted by Telegram user ID):
 - `/adddays {uuid} {days}` — manually credit days

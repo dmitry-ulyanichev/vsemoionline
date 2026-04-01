@@ -15,9 +15,10 @@ import android.text.Editable
 import android.text.InputFilter
 import android.text.TextWatcher
 import android.view.KeyEvent
-import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.animation.ValueAnimator
+import android.graphics.Color
 import android.view.animation.AlphaAnimation
 import android.view.animation.Animation
 import android.widget.EditText
@@ -75,6 +76,9 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         private const val PREF_TRAFFIC_TOTAL_GB = "traffic_total_gb"
         private const val PREF_THROTTLE_MBPS = "throttle_mbps"
         private const val PREF_CABINET_URL = "cabinet_url"
+        private const val PREF_LAST_STATUS_POLL_MS = "last_status_poll_ms"
+
+        private const val STATUS_POLL_INTERVAL_MS = 30 * 60 * 1000L // 30 minutes
 
         // Two-cycle provisioning timeouts for better UX
         private const val PROVISION_TIMEOUT_QUICK_MS = 3000  // 3 seconds - Cycle 1: quick scan
@@ -190,15 +194,22 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         binding.fab.setOnClickListener {
             if (mainViewModel.isRunning.value == true) {
                 V2RayServiceManager.stopVService(this)
-            } else if ((MmkvManager.decodeSettingsString(AppConfig.PREF_MODE) ?: VPN) == VPN) {
-                val intent = VpnService.prepare(this)
-                if (intent == null) {
-                    startV2Ray()
-                } else {
-                    requestVpnPermission.launch(intent)
-                }
             } else {
-                startV2Ray()
+                val blocked = connectionBlockedReason()
+                if (blocked != null) {
+                    toast(blocked)
+                    return@setOnClickListener
+                }
+                if ((MmkvManager.decodeSettingsString(AppConfig.PREF_MODE) ?: VPN) == VPN) {
+                    val intent = VpnService.prepare(this)
+                    if (intent == null) {
+                        startV2Ray()
+                    } else {
+                        requestVpnPermission.launch(intent)
+                    }
+                } else {
+                    startV2Ray()
+                }
             }
         }
         binding.layoutTest.setOnClickListener {
@@ -258,6 +269,8 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
 
         // VseMoiOnline: Handle magic link on app startup
         handleMagicLink(intent)
+
+        applyAnimatedBackgrounds()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -642,7 +655,12 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
                 Log.i(AppConfig.TAG, "VseMoiOnline: Provisioned — plan=$plan, importing config")
 
                 // Immediately fetch status so days_remaining/traffic are populated before UI renders
-                try { pollStatus(xrayUuid) } catch (e: Exception) {
+                try {
+                    pollStatus(xrayUuid)
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                        .putLong(PREF_LAST_STATUS_POLL_MS, System.currentTimeMillis())
+                        .apply()
+                } catch (e: Exception) {
                     Log.w(AppConfig.TAG, "VseMoiOnline: Post-provision status poll failed: ${e.message}")
                 }
 
@@ -729,17 +747,21 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
             else -> trafficTotalGb
         }
 
-        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+        val editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
             .putString(PREF_PLAN, plan)
             .putInt(PREF_PAID_DAYS_REMAINING, daysRemaining)
             .putFloat(PREF_TRAFFIC_TOTAL_GB, trafficTotalGb)
             .putFloat(PREF_TRAFFIC_REMAINING_GB, trafficRemainingGb)
             .putFloat(PREF_THROTTLE_MBPS, throttleMbps)
-            .apply()
+        if (!json.isNull("cabinet_url")) editor.putString(PREF_CABINET_URL, json.getString("cabinet_url"))
+        editor.apply()
 
         withContext(Dispatchers.Main) {
+            val dbgDays = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getInt(PREF_PAID_DAYS_REMAINING, -1)
+            Log.i(AppConfig.TAG, "VseMoiOnline: Post-poll UI update on main thread — days=$dbgDays")
             updateSubscriptionHeader()
             updateSubBlock()
+            refreshFabIdleAppearance()
         }
 
         // Phase 2: if current_domain changed, update backend_base_url and re-provision.
@@ -760,19 +782,18 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
             adapter.isRunning = isRunning
             adapter.notifyDataSetChanged()  // Refresh adapter to update switch states
             if (isRunning) {
-                binding.fab.setImageResource(R.drawable.ic_stop_24dp)
-                binding.fab.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.vsm_fab_stop))
+                setFabConnected(true)
                 binding.fab.contentDescription = getString(R.string.action_stop_service)
                 setTestState(getString(R.string.connection_connected))
                 binding.layoutTest.isFocusable = true
                 startStatusPolling()
+                updateVpnStatusLabel("CONNECTED")
             } else {
-                binding.fab.setImageResource(R.drawable.ic_play_24dp)
-                binding.fab.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.vsm_mint))
                 binding.fab.contentDescription = getString(R.string.tasker_start_service)
                 setTestState(getString(R.string.connection_not_connected))
                 binding.layoutTest.isFocusable = false
                 stopStatusPolling()
+                refreshFabIdleAppearance()
             }
         }
         mainViewModel.startListenBroadcast()
@@ -825,6 +846,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         mainViewModel.reloadServerList()
         updateSubscriptionHeader()
         updateSubBlock()
+        refreshFabIdleAppearance()
 
         // VseMoiOnline: Auto-provision on first launch if no servers configured
         checkAndAutoProvision()
@@ -862,6 +884,24 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
             mainViewModel.removeAllServer()
             // fall through to full provisioning below
         } else if (serverList.size == 1) {
+            // Refresh status on app open so days_remaining is never stale, rate-limited to 30 min
+            val storedXrayUuid = prefs.getString(PREF_XRAY_UUID, null)
+            val lastPollMs = prefs.getLong(PREF_LAST_STATUS_POLL_MS, 0L)
+            val elapsed = System.currentTimeMillis() - lastPollMs
+            Log.i(AppConfig.TAG, "VseMoiOnline: App-open check — uuid=${storedXrayUuid?.take(8)} lastPollMs=$lastPollMs elapsed=${elapsed}ms limit=${STATUS_POLL_INTERVAL_MS}ms")
+            if (storedXrayUuid != null && elapsed >= STATUS_POLL_INTERVAL_MS) {
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try {
+                        pollStatus(storedXrayUuid)
+                        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                            .putLong(PREF_LAST_STATUS_POLL_MS, System.currentTimeMillis())
+                            .apply()
+                        Log.i(AppConfig.TAG, "VseMoiOnline: App-open status poll complete")
+                    } catch (e: Exception) {
+                        Log.w(AppConfig.TAG, "VseMoiOnline: App-open status poll failed: ${e.message}")
+                    }
+                }
+            }
             return
         }
 
@@ -879,20 +919,6 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
 
     public override fun onPause() {
         super.onPause()
-    }
-
-    override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.menu_main, menu)
-        return super.onCreateOptionsMenu(menu)
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem) = when (item.itemId) {
-        R.id.service_restart -> {
-            restartV2Ray()
-            true
-        }
-
-        else -> super.onOptionsItemSelected(item)
     }
 
     private fun importManually(createConfigType: Int) {
@@ -1164,6 +1190,11 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     private fun setupVsmUi() {
         binding.layoutSubHeader.setOnClickListener { toggleSubBlock() }
         binding.tvSubLink.setOnClickListener { openCabinetUrl() }
+        val isNightSetup = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                Configuration.UI_MODE_NIGHT_YES
+        if (isNightSetup) {
+            binding.tvSubLink.setBackgroundResource(R.drawable.pill_link_bg_dark)
+        }
         binding.rowServer.setOnClickListener { onServerRowTapped() }
         binding.btnPay.setOnClickListener { openCabinetUrl() }
         binding.btnFamily.setOnClickListener { /* Phase 3 — family referral */ }
@@ -1178,7 +1209,18 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     private fun toggleSubBlock() {
         val expanding = binding.layoutSubBody.visibility != View.VISIBLE
         binding.layoutSubBody.visibility = if (expanding) View.VISIBLE else View.GONE
-        binding.tvSubChevron.text = if (expanding) "∨" else "∧"
+        binding.tvSubChevron.animate()
+            .rotation(if (expanding) 0f else 180f)
+            .setDuration(200)
+            .start()
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val plan = prefs.getString(PREF_PLAN, "free") ?: "free"
+        val days = prefs.getInt(PREF_PAID_DAYS_REMAINING, 0)
+        val trafficTotal = prefs.getFloat(PREF_TRAFFIC_TOTAL_GB, if (plan == "paid") 250f else 25f)
+        val trafficRemaining = prefs.getFloat(PREF_TRAFFIC_REMAINING_GB, trafficTotal)
+        val trafficPct = (trafficRemaining / trafficTotal).coerceIn(0f, 1f)
+        val effectiveDays = if (plan == "paid" && trafficRemaining <= 0f) 0 else days
+        updateCollapsedHint(expanding, plan, effectiveDays, trafficPct)
     }
 
     private fun openCabinetUrl() {
@@ -1297,31 +1339,37 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         val plan = prefs.getString(PREF_PLAN, "free")
         val days = prefs.getInt(PREF_PAID_DAYS_REMAINING, 0)
+        val trafficRemainingGb = prefs.getFloat(PREF_TRAFFIC_REMAINING_GB, Float.MAX_VALUE)
+        // Traffic exhaustion overrides days: show 0 so the user understands why VPN is blocked
+        val effectiveDays = if (plan == "paid" && trafficRemainingGb <= 0f) 0 else days
 
         if (plan == "free") {
             binding.tvSubValue.text = getString(R.string.vsm_sub_free)
             binding.tvSubValue.setTextColor(ContextCompat.getColor(this, R.color.vsm_sub_free))
             binding.tvSubValue.clearAnimation()
+            setSubValueUrgentPulse(false)
         } else {
-            binding.tvSubValue.text = resources.getQuantityString(R.plurals.vsm_days_remaining, days, days)
+            binding.tvSubValue.text = resources.getQuantityString(R.plurals.vsm_days_remaining, effectiveDays, effectiveDays)
             when {
-                days <= 1 -> {
+                effectiveDays <= 3 -> {
                     binding.tvSubValue.setTextColor(ContextCompat.getColor(this, R.color.vsm_sub_urgent))
-                    startBlinking(binding.tvSubValue)
+                    binding.tvSubValue.clearAnimation()
+                    setSubValueUrgentPulse(true)
                 }
-                days <= 5 -> {
+                effectiveDays <= 5 -> {
                     binding.tvSubValue.setTextColor(ContextCompat.getColor(this, R.color.vsm_sub_warn))
                     binding.tvSubValue.clearAnimation()
+                    setSubValueUrgentPulse(false)
                 }
                 else -> {
                     binding.tvSubValue.setTextColor(ContextCompat.getColor(this, R.color.vsm_sub_ok))
                     binding.tvSubValue.clearAnimation()
+                    setSubValueUrgentPulse(false)
                 }
             }
         }
 
-        // Cabinet link is always shown; openCabinetUrl() is a no-op if URL not yet known
-        binding.tvSubLink.visibility = View.VISIBLE
+        binding.tvSubLink.visibility = if (plan == "free") View.GONE else View.VISIBLE
     }
 
     private fun startBlinking(view: View) {
@@ -1343,11 +1391,11 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         binding.tvServerName.text = "Франкфурт, Германия"
 
         val plan = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(PREF_PLAN, "free")
-        // Arrow is active (darker) only for paid users who can actually change servers
-        binding.tvServerArrow.setTextColor(
+        // Arrow is active (tinted green) only for paid users who can actually change servers
+        binding.tvServerArrow.imageTintList = ColorStateList.valueOf(
             ContextCompat.getColor(
                 this,
-                if (plan == "paid") R.color.vsm_sub_free else R.color.vsm_border
+                if (plan == "paid") R.color.vsm_sub_ok else R.color.vsm_border
             )
         )
     }
@@ -1362,6 +1410,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         val days = prefs.getInt(PREF_PAID_DAYS_REMAINING, 0)
         val trafficTotalGb = prefs.getFloat(PREF_TRAFFIC_TOTAL_GB, if (plan == "paid") 250f else 25f)
         val trafficRemainingGb = prefs.getFloat(PREF_TRAFFIC_REMAINING_GB, trafficTotalGb)
+        val effectiveDays = if (plan == "paid" && trafficRemainingGb <= 0f) 0 else days
         val throttleMbps = prefs.getFloat(PREF_THROTTLE_MBPS, 0f)
 
         val isNight = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
@@ -1382,23 +1431,30 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
 
         // ── Speed ring ───────────────────────────────────────────────────
         // throttle_mbps from /status represents the tier cap (0 = not yet polled)
-        val speedFraction = if (throttleMbps > 0) (throttleMbps / 25f).coerceIn(0f, 1f) else 0f
-        val speedColor = if (plan == "free")
-            ContextCompat.getColor(this, R.color.vsm_speed_blue)
-        else
-            ContextCompat.getColor(this, R.color.vsm_mint)
+        val trafficExhausted = trafficRemainingGb <= 0f
+        val speedFraction = if (trafficExhausted || throttleMbps <= 0f) 0f
+                            else (throttleMbps / 25f).coerceIn(0f, 1f)
+        val speedColor = when {
+            trafficExhausted -> ContextCompat.getColor(this, R.color.vsm_traffic_red)
+            plan == "free"   -> ContextCompat.getColor(this, R.color.vsm_speed_blue)
+            else             -> ContextCompat.getColor(this, R.color.vsm_traffic_green)
+        }
 
         binding.chartSpeed.apply {
             ringBgColor = ringBg
             ringColor = speedColor
             fraction = speedFraction
-            centerValue = if (throttleMbps > 0f)
+            centerValue = if (trafficExhausted) "0.0"
+            else if (throttleMbps > 0f)
                 if (throttleMbps % 1f == 0f) throttleMbps.toInt().toString()
                 else String.format("%.1f", throttleMbps)
             else "–"
             centerSub = getString(R.string.vsm_speed_of_format, 25)
-            subTextColor = ContextCompat.getColor(this@MainActivity, R.color.vsm_hint_text)
-            showGhostArc = (plan == "free")
+            subTextColor = if (trafficExhausted)
+                ContextCompat.getColor(this@MainActivity, R.color.vsm_traffic_red)
+            else
+                ContextCompat.getColor(this@MainActivity, R.color.vsm_hint_text)
+            showGhostArc = (plan == "free") && !trafficExhausted
             ghostColor = ContextCompat.getColor(this@MainActivity, R.color.vsm_mint)
             ghostAlpha = if (isNight) 77 else 56
         }
@@ -1408,27 +1464,18 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         // Paid traffic cell stays static — /status for free users doesn't return the paid cap.
         binding.tvCmpFreeTraffic.text = "${trafficTotalGb.toInt()} ГБ"
 
-        if (plan == "free") {
-            binding.layoutCmpTable.visibility = View.VISIBLE
-            binding.btnPay.visibility = View.VISIBLE
-            binding.btnFamily.visibility = View.GONE
-            binding.btnRenew.visibility = View.GONE
-        } else {
-            binding.layoutCmpTable.visibility = View.GONE
-            binding.btnPay.visibility = View.GONE
-            if (days <= 3) {
-                binding.btnRenew.visibility = View.VISIBLE
-                binding.btnFamily.visibility = View.GONE
-            } else {
-                binding.btnFamily.visibility = View.VISIBLE
-                binding.btnRenew.visibility = View.GONE
-            }
-        }
+        binding.layoutCmpTable.visibility = if (plan == "free") View.VISIBLE else View.GONE
+        updateSubButtons(plan ?: "free", effectiveDays, trafficFraction)
 
         // ── Activation code section ───────────────────────────────────────
-        // Show for free users and paid users running low on time; hide for comfortable paid
+        // Show for free users and paid users running low on time or out of traffic
         binding.layoutActivationSection.visibility =
-            if (plan == "free" || (plan == "paid" && days <= 3)) View.VISIBLE else View.GONE
+            if (plan == "free" || (plan == "paid" && effectiveDays <= 3)) View.VISIBLE else View.GONE
+
+        // ── Collapsed hint ────────────────────────────────────────────────
+        // Initialize on every data refresh, not just on toggle
+        val bodyVisible = binding.layoutSubBody.visibility == View.VISIBLE
+        updateCollapsedHint(bodyVisible, plan ?: "free", effectiveDays, trafficFraction)
     }
 
     private fun trafficRingColor(fraction: Float): Int = ContextCompat.getColor(
@@ -1450,7 +1497,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         // Handle navigation view item clicks here.
         when (item.itemId) {
             R.id.per_app_proxy_settings -> startActivity(Intent(this, PerAppProxyActivity::class.java))
-            R.id.source_code -> Utils.openUri(this, AppConfig.APP_URL)
+            R.id.source_code -> Utils.openUri(this, AppConfig.VSM_APP_URL)
             R.id.oss_licenses -> {
                 val webView = android.webkit.WebView(this)
                 webView.loadUrl("file:///android_asset/open_source_licenses.html")
@@ -1460,11 +1507,276 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
                     .setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
                     .show()
             }
-            R.id.tg_channel -> Utils.openUri(this, AppConfig.TG_CHANNEL_URL)
-            R.id.privacy_policy -> Utils.openUri(this, AppConfig.APP_PRIVACY_POLICY)
+            R.id.tg_channel -> Utils.openUri(this, AppConfig.VSM_TG_URL)
+            R.id.privacy_policy -> Utils.openUri(this, AppConfig.VSM_PRIVACY_URL)
         }
 
         binding.drawerLayout.closeDrawer(GravityCompat.START)
         return true
+    }
+
+    // ── Background colour cycling ─────────────────────────────────────────
+
+    private fun applyAnimatedBackgrounds() {
+        val isNight = (resources.configuration.uiMode and
+                Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+
+        // Toolbar: dark navy drifting through purple/wine neighbours
+        val toolbarColors = if (isNight) intArrayOf(
+            Color.parseColor("#0F1222"),   // base
+            Color.parseColor("#131021"),   // blue-purple
+            Color.parseColor("#17101F"),   // deeper purple
+            Color.parseColor("#15101E"),   // wine-purple
+            Color.parseColor("#121120")    // indigo
+        ) else intArrayOf(
+            Color.parseColor("#1F2344"),   // base
+            Color.parseColor("#241F45"),   // blue-purple
+            Color.parseColor("#29193E"),   // purple-wine
+            Color.parseColor("#261C43"),   // deep indigo
+            Color.parseColor("#221E45")    // indigo-purple
+        )
+
+        // VPN area: surface shifting through lavender and blush tints
+        val vpnColors = if (isNight) intArrayOf(
+            Color.parseColor("#262C4A"),   // base
+            Color.parseColor("#2C2849"),   // purple
+            Color.parseColor("#301F44"),   // wine-purple
+            Color.parseColor("#2C2848"),   // muted purple
+            Color.parseColor("#282B4A")    // blue-purple
+        ) else intArrayOf(
+            Color.parseColor("#F5F5F5"),   // base
+            Color.parseColor("#F3F1F9"),   // lavender
+            Color.parseColor("#F8F1F5"),   // blush
+            Color.parseColor("#F5F1F8"),   // soft violet
+            Color.parseColor("#F7F2F6")    // rose-lavender
+        )
+
+        animateBackground(binding.toolbar,     toolbarColors, 9_000L)
+        animateBackground(binding.mainContent, vpnColors,    12_000L)
+    }
+
+    private fun animateBackground(view: View, colors: IntArray, halfCycleMs: Long) {
+        ValueAnimator.ofArgb(*colors).apply {
+            duration     = halfCycleMs
+            repeatCount  = ValueAnimator.INFINITE
+            repeatMode   = ValueAnimator.REVERSE   // seamless loop — no jump at ends
+            interpolator = android.view.animation.LinearInterpolator()
+            addUpdateListener { view.setBackgroundColor(it.animatedValue as Int) }
+            start()
+        }
+    }
+
+    // ── Change 6: subscription button animations ─────────────────────────
+
+    private var renewPulseAnimator: ValueAnimator? = null
+
+    private fun updateSubButtons(plan: String, daysRemaining: Int, trafficFraction: Float) {
+        val isNight = (resources.configuration.uiMode and
+                Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        when {
+            plan == "free" -> {
+                binding.btnPayContainer.visibility = View.VISIBLE
+                binding.btnFamily.visibility = View.GONE
+                binding.btnRenew.visibility = View.GONE
+                stopRenewPulse()
+            }
+            daysRemaining <= 3 || trafficFraction < 0.10f -> {
+                binding.btnPayContainer.visibility = View.GONE
+                binding.btnFamily.visibility = View.GONE
+                binding.btnRenew.visibility = View.VISIBLE
+                val urgentColor = ContextCompat.getColor(this, R.color.vsm_sub_urgent)
+                val urgentHiColor = ContextCompat.getColor(this, R.color.vsm_sub_urgent_hi)
+                startRenewPulse(urgentColor, urgentHiColor)
+            }
+            else -> {
+                binding.btnPayContainer.visibility = View.GONE
+                binding.btnRenew.visibility = View.GONE
+                binding.btnFamily.visibility = View.VISIBLE
+                stopRenewPulse()
+                if (isNight) {
+                    binding.btnFamily.setTextColor(
+                        ContextCompat.getColor(this, R.color.vsm_sub_ok))
+                    binding.btnFamily.strokeColor = ColorStateList.valueOf(
+                        Color.argb(51, 129, 199, 132))
+                }
+            }
+        }
+    }
+
+    private fun startRenewPulse(colorA: Int, colorB: Int) {
+        renewPulseAnimator?.cancel()
+        renewPulseAnimator = ValueAnimator.ofArgb(colorA, colorB).apply {
+            duration = 700
+            repeatMode = ValueAnimator.REVERSE
+            repeatCount = ValueAnimator.INFINITE
+            addUpdateListener { anim ->
+                binding.btnRenew.setTextColor(anim.animatedValue as Int)
+            }
+            start()
+        }
+    }
+
+    private fun stopRenewPulse() {
+        renewPulseAnimator?.cancel()
+        renewPulseAnimator = null
+    }
+
+    // ── Change 7: tv_sub_value urgent pulse ──────────────────────────────
+
+    private var subValuePulseAnimator: ValueAnimator? = null
+
+    private fun setSubValueUrgentPulse(urgent: Boolean) {
+        subValuePulseAnimator?.cancel()
+        if (!urgent) {
+            subValuePulseAnimator = null
+            return
+        }
+        val colorA = ContextCompat.getColor(this, R.color.vsm_sub_urgent)
+        val colorB = ContextCompat.getColor(this, R.color.vsm_sub_urgent_hi)
+        subValuePulseAnimator = ValueAnimator.ofArgb(colorA, colorB).apply {
+            duration = 700
+            repeatMode = ValueAnimator.REVERSE
+            repeatCount = ValueAnimator.INFINITE
+            addUpdateListener { anim ->
+                binding.tvSubValue.setTextColor(anim.animatedValue as Int)
+            }
+            start()
+        }
+    }
+
+    // ── Change 8: collapsed hint badge ───────────────────────────────────
+
+    private var hintPulseAnimator: ValueAnimator? = null
+
+    private fun updateCollapsedHint(subBodyVisible: Boolean, plan: String,
+                                     daysRemaining: Int, trafficPct: Float) {
+        if (subBodyVisible) {
+            binding.tvSubTrafficHint.visibility = View.GONE
+            hintPulseAnimator?.cancel()
+            return
+        }
+        val daysUrgent  = plan == "paid" && daysRemaining <= 3
+        val trafficWarn = trafficPct in 0.10f..0.30f
+        val trafficUrge = trafficPct < 0.10f
+
+        when {
+            daysUrgent || trafficUrge -> {
+                val label = when {
+                    daysUrgent -> "$daysRemaining д."
+                    else -> "${(trafficPct * 100).toInt()}% трафика"
+                }
+                binding.tvSubTrafficHint.text = label
+                binding.tvSubTrafficHint.visibility = View.VISIBLE
+                val colorA = ContextCompat.getColor(this, R.color.vsm_sub_urgent)
+                val colorB = ContextCompat.getColor(this, R.color.vsm_sub_urgent_hi)
+                hintPulseAnimator?.cancel()
+                hintPulseAnimator = ValueAnimator.ofArgb(colorA, colorB).apply {
+                    duration = 700
+                    repeatMode = ValueAnimator.REVERSE
+                    repeatCount = ValueAnimator.INFINITE
+                    addUpdateListener {
+                        binding.tvSubTrafficHint.setTextColor(it.animatedValue as Int)
+                    }
+                    start()
+                }
+            }
+            trafficWarn -> {
+                val pct = (trafficPct * 100).toInt()
+                binding.tvSubTrafficHint.text = "$pct% трафика"
+                binding.tvSubTrafficHint.setTextColor(
+                    ContextCompat.getColor(this, R.color.vsm_sub_warn))
+                binding.tvSubTrafficHint.visibility = View.VISIBLE
+                hintPulseAnimator?.cancel()
+            }
+            else -> {
+                binding.tvSubTrafficHint.visibility = View.GONE
+                hintPulseAnimator?.cancel()
+            }
+        }
+    }
+
+    // ── Change 11: VPN status label ──────────────────────────────────────
+
+    private fun updateVpnStatusLabel(state: String) {
+        binding.tvVpnStatus.text = when (state) {
+            "CONNECTED"  -> getString(R.string.vpn_connected)
+            "CONNECTING" -> getString(R.string.vpn_connecting)
+            else         -> getString(R.string.vpn_disconnected)
+        }
+    }
+
+    // ── Change 2: FAB gradient + pulse ───────────────────────────────────
+
+    private fun setFabConnected(connected: Boolean) {
+        binding.fab.setImageResource(R.drawable.ic_power)
+        if (connected) {
+            binding.fab.backgroundTintList = ColorStateList.valueOf(
+                ContextCompat.getColor(this, R.color.vsm_fab_stop))
+            binding.fabHalo.backgroundTintList = ColorStateList.valueOf(
+                Color.argb(80, 183, 28, 28))   // semi-transparent dark red
+            startFabPulse()
+        } else {
+            refreshFabIdleAppearance()
+        }
+    }
+
+    /** Returns a user-facing block reason if connection should be prevented, null if allowed. */
+    private fun connectionBlockedReason(): String? {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val plan = prefs.getString(PREF_PLAN, null) ?: return null
+        if (plan == "paid" && prefs.getInt(PREF_PAID_DAYS_REMAINING, Int.MAX_VALUE) == 0)
+            return getString(R.string.vpn_blocked_days)
+        if (prefs.getFloat(PREF_TRAFFIC_REMAINING_GB, Float.MAX_VALUE) <= 0f)
+            return getString(R.string.vpn_blocked_traffic)
+        return null
+    }
+
+    /** Apply blocked (grey) or normal idle (green) FAB appearance + status label. No-op when VPN is running. */
+    private fun refreshFabIdleAppearance() {
+        if (mainViewModel.isRunning.value == true) return
+        val reason = connectionBlockedReason()
+        if (reason != null) {
+            binding.fab.backgroundTintList = ColorStateList.valueOf(
+                ContextCompat.getColor(this, R.color.color_fab_inactive))
+            binding.fabHalo.backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+            binding.fabHalo.alpha = 0f
+            stopFabPulse()
+            binding.tvVpnStatus.text = reason
+        } else {
+            binding.fab.backgroundTintList = ColorStateList.valueOf(
+                ContextCompat.getColor(this, R.color.vsm_traffic_green))
+            binding.fabHalo.backgroundTintList = ColorStateList.valueOf(
+                Color.argb(60, 86, 171, 123))
+            binding.fabHalo.alpha = 0.7f
+            stopFabPulse()
+            binding.tvVpnStatus.text = getString(R.string.vpn_disconnected)
+        }
+    }
+
+    private var fabPulseAnimator: android.animation.ObjectAnimator? = null
+
+    private fun startFabPulse() {
+        fabPulseAnimator?.cancel()
+        binding.fabHalo.alpha = 0.75f
+        binding.fabHalo.scaleX = 1.0f
+        binding.fabHalo.scaleY = 1.0f
+        val scaleX = android.animation.PropertyValuesHolder.ofFloat("scaleX", 1.0f, 1.35f)
+        val scaleY = android.animation.PropertyValuesHolder.ofFloat("scaleY", 1.0f, 1.35f)
+        val alpha  = android.animation.PropertyValuesHolder.ofFloat("alpha",  0.75f, 0.15f)
+        fabPulseAnimator = android.animation.ObjectAnimator
+            .ofPropertyValuesHolder(binding.fabHalo, scaleX, scaleY, alpha).apply {
+                duration = 1200
+                repeatMode = android.animation.ObjectAnimator.REVERSE
+                repeatCount = android.animation.ObjectAnimator.INFINITE
+                interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+                start()
+            }
+    }
+
+    private fun stopFabPulse() {
+        fabPulseAnimator?.cancel()
+        fabPulseAnimator = null
+        binding.fabHalo.scaleX = 1.0f
+        binding.fabHalo.scaleY = 1.0f
     }
 }

@@ -7,6 +7,85 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Backend: `GET /privacy-policy`** — Russian-language privacy policy served as mobile-friendly HTML with dark-mode support (`prefers-color-scheme`). Registered in `app.js`.
+- **Backend: orphan device cleanup in `POST /provision`** — when an existing account is re-provisioned with a new `device_fingerprint` (reinstall / clear data), all prior device rows for that account are deregistered from Xray via gRPC and deleted from the DB before the new device is created.
+
+### Changed
+- **Hamburger menu: source code link** → `https://github.com/dmitry-ulyanichev/vsemoionline` (was V2rayNG repo). Constant `VSM_APP_URL` added to `AppConfig.kt`.
+- **Hamburger menu: Telegram channel** → `https://t.me/vsemoionline` (was `t.me/github_2dust`). Constant `VSM_TG_URL` added to `AppConfig.kt`.
+- **Hamburger menu: privacy policy** → `https://vmonl.store/privacy-policy` (was Chinese CR.md from V2rayNG). Constant `VSM_PRIVACY_URL` added to `AppConfig.kt`.
+- **Nav header redesigned**: height 160 dp → 120 dp; app name font `Display1` (34 sp) → 20 sp bold; background replaced from V2rayNG PNG with `@color/vsm_toolbar` (adapts light/dark); version text softened to 60 % white.
+- **NavigationView styling**: `itemIconTint` → `@color/vsm_link` (theme-adaptive); `itemTextColor` → `?android:textColorPrimary`; background → `@color/vsm_surface`.
+
+### Removed
+- **3-dot overflow menu** — contained a single "Restart service" item irrelevant to end users. `onCreateOptionsMenu`, `onOptionsItemSelected`, and `import android.view.Menu` removed from `MainActivity.kt`; `menu_main.xml` emptied.
+
+### Added
+- **Animated toolbar and VPN area backgrounds**
+  - Toolbar slowly cycles through navy/purple/wine shades (9 s half-cycle)
+  - VPN area cycles through lavender/blush tints in light mode, deeper blues in dark (12 s half-cycle)
+  - Seamless via `ValueAnimator.ofArgb` REVERSE repeat — no jump at loop ends
+
+- **FAB redesign: power icon + halo pulse**
+  - Single `ic_power` icon replaces separate play/stop icons
+  - Idle (ready): green tint + faint green halo
+  - Connected: dark red tint + pulsing halo (scale 1.0→1.35, alpha fade, 1200 ms loop)
+  - Blocked (quota/days exhausted): grey tint + transparent halo; shows block reason instead of connecting
+
+- **VPN status label** (`tv_vpn_status`)
+  - Shows "Подключено" / "Нажмите для подключения" / "Подключение…"
+  - Shows "Оплатите подписку" or "Трафик исчерпан" when connection is blocked
+
+- **Connection blocking on quota/days exhaustion**
+  - FAB tap blocked with toast when `paid_days_remaining == 0` or `traffic_remaining_gb <= 0`
+  - Speed ring shows 0.0 in red when traffic exhausted
+  - `effectiveDays` treated as 0 when paid + traffic exhausted (drives all urgency logic)
+
+- **Subscription button animations**
+  - "Продлить подписку" button pulses between red/bright-red (700 ms) when ≤ 3 days or < 10 % traffic
+  - Wrapped in `btnPayContainer` for unified show/hide
+
+- **Subscription header urgent pulse**
+  - `tv_sub_value` text colour pulses urgently (700 ms) at ≤ 3 days remaining
+
+- **Collapsed hint badge** (`tv_sub_traffic_hint`)
+  - Appears when subscription block is collapsed and user is running low
+  - Shows days remaining (urgent pulse) at ≤ 3 days; traffic % (warn colour) at 10–30 %; hidden otherwise
+
+- **Chevron rotation animation on expand/collapse**
+  - 200 ms rotation replaces text swap of "∨"/"∧"
+
+- **Night-mode pill link background** for cabinet link (`pill_link_bg_dark` drawable)
+
+- **App-open status refresh (rate-limited)**
+  - `/status` polled on app open if ≥ 30 min since last successful poll
+  - Prevents stale subscription display without hammering the server
+
+- **Admin token issuance endpoint** (`POST /admin/token`)
+  - Operator generates single-use activation tokens via HTTP without DB access
+  - Body: `{ xray_uuid, days, expires_hours? }`; default expiry 48 h
+  - Returns formatted token, raw token, and ready-to-send `activation_url`
+
+- **Admin throttle endpoint** (`POST /admin/throttle`)
+  - Operator updates free/paid tier throttle rate without SSH
+  - Body: `{ tier, rate_kbps }`; proxies to tc-agent; protected by `ADMIN_SECRET`
+
+- **nginx reverse proxy + TLS** (`infra/nginx/vmonl.store.conf`)
+  - `vmonl.store` proxied to client-backend with HTTPS via Let's Encrypt / certbot
+  - Deployed via `.github/workflows/nginx.yml`
+
+- **`cabinet_url` wired to payment buttons**
+  - Backend returns `cabinet_url` from both `/provision` and `/status`
+  - Android saves it on every `/status` poll; "Оплатить подписку", "Продлить подписку", "Личный кабинет →" open it in the browser
+
+### Fixed
+- **Comparison table free-traffic cell now dynamic**
+  - Was hardcoded string "25 ГБ"; now reads `PREF_TRAFFIC_TOTAL_GB` populated from `traffic_cap_mb` in `/status`
+
+- **APK download returning 404**
+  - `/opt/vsemoi` host directory was not mounted into the client-backend container; added volume mount in `docker-compose.yml`
+
+### Added
 - **Activation code UI polish**
   - "Ввести код активации" label above the 8-field code input row
   - Half-transparent grey × hint placeholders in each code field
