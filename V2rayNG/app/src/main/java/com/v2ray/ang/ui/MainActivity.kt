@@ -1597,13 +1597,20 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         )
     }
 
-    private fun regionToFlag(region: String?): String = when {
-        region == null                                                  -> "🌐"
-        region.startsWith("EU-MD")                                     -> "🇲🇩"
-        region.startsWith("EU-FR") || region.startsWith("EU-DE")      -> "🇩🇪"
-        region.startsWith("EU-")                                       -> "🇪🇺"
-        region.startsWith("US-")                                       -> "🇺🇸"
-        else                                                            -> "🌐"
+    private fun regionToFlag(region: String?): String = when (region) {
+        "EU"                                        -> "🇳🇱"  // Netherlands (Amsterdam)
+        "EU-FR"                                     -> "🇩🇪"  // Germany (Frankfurt)
+        "EU-LO"                                     -> "🇬🇧"  // United Kingdom (London)
+        "EU-MD"                                     -> "🇪🇸"  // Spain (Madrid)
+        "EU-ML"                                     -> "🇮🇹"  // Italy (Milan)
+        "EU-ST"                                     -> "🇸🇪"  // Sweden (Stockholm)
+        "AS"                                        -> "🇨🇳"  // China
+        "AS-SG"                                     -> "🇸🇬"  // Singapore
+        "AS-TY"                                     -> "🇯🇵"  // Japan (Tokyo)
+        "AU-SY"                                     -> "🇦🇺"  // Australia (Sydney)
+        "CA-TR"                                     -> "🇨🇦"  // Canada (Toronto)
+        "IL", "IL-HA", "IL-PT", "IL-RH", "IL-TA"  -> "🇮🇱"  // Israel
+        else -> if (region?.startsWith("US-") == true) "🇺🇸" else "🌐"
     }
 
     /**
