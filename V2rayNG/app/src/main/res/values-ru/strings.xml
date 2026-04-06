@@ -245,6 +245,13 @@
     <string name="summary_pref_auto_update_subscription">Автоматическое обновление подписок в фоновом режиме с указанным интервалом. В зависимости от устройства эта функция может работать не всегда.</string>
     <string name="title_pref_auto_update_interval">Интервал автообновления (минут, не менее 15)</string>
 
+    <plurals name="vsm_days_remaining">
+        <item quantity="one">%d день</item>
+        <item quantity="few">%d дня</item>
+        <item quantity="many">%d дней</item>
+        <item quantity="other">%d дней</item>
+    </plurals>
+
     <string name="title_core_loglevel">Подробность ведения журнала</string>
     <string name="title_outbound_domain_resolve_method">Предопределение исходящего домена</string>
     <string name="title_mode">Режим</string>
@@ -401,6 +408,11 @@
 
     <!-- VseMoiOnline: Provisioning messages -->
     <string name="provisioning_retry_message">Всё ещё пытаемся подключиться, пожалуйста, подождите...</string>
-    <string name="provisioning_failed_message">Не удалось подключиться к серверу. Пожалуйста, проверьте подключение к интернету.</string>
+    <string name="provisioning_failed_title">Нет подключения</string>
+    <string name="provisioning_failed_message">Сервис ВПН временно недоступен. Попробуйте позже. Если проблема не исчезнет — обратитесь в поддержку.</string>
+    <string name="vsm_zone_picker_title">Выберите сервер</string>
+    <string name="vsm_zone_unavailable">Сервер недоступен. Попробуйте другую зону.</string>
+    <string name="vsm_zone_switch_error">Не удалось переключить сервер. Проверьте подключение.</string>
+    <string name="vsm_zone_connected">Подключено</string>
 
 </resources>

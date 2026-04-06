@@ -26,7 +26,7 @@ Tables (in FK-safe order):
 
 - `servers`: id, provider, region, ip, status (active/draining/dead), tier (free/paid/both), capacity, created_at
 - `domain_names`: id, domain, server_id (FK, nullable), status (active/rotating/dead), is_primary, created_at
-- `accounts`: id, account_uuid, android_id, plan (free/paid), paid_days_remaining, created_at, last_seen
+- `accounts`: id, account_uuid, android_id, plan (free/paid), paid_until (timestamptz), created_at, last_seen
 - `devices`: id, account_id (FK), device_fingerprint, assigned_server_id (FK), assigned_inbound (free/paid), xray_uuid, created_at
 - `tokens`: id, account_id (FK), token (unique), type (activation/payment), expires_at, used_at
 - `users`: id, account_id (FK), display_name, days_allocated (sub-accounts under paying user)
@@ -69,7 +69,7 @@ Implement in this order (each testable independently with curl):
 
 **`GET /activate` + `POST /activate`**
 - GET: renders HTML page explaining activation (deep link landing).
-- POST: consumes token, upgrades account to paid, sets `paid_days_remaining`, redirects to confirmation page.
+- POST: consumes token, upgrades account to paid, sets `paid_until = GREATEST(COALESCE(paid_until, NOW()), NOW()) + N days` (stacking-safe), redirects to confirmation page.
 - Token must be single-use and time-limited (suggest 48h expiry).
 
 ### 1.4 Payment UI Pages (Placeholder)
@@ -131,8 +131,8 @@ No Docker Swarm — single VPS at this stage. Services managed by `docker-compos
 
 ### 1.11 Android Client Updates
 
-- On first launch: call `/provision`, store returned `xray_uuid` and `server_address` in Android AccountManager.
-- On subsequent launches: call `/status`, update config if server address changed.
+- On first launch: call `/provision`, store returned `xray_uuid` and `vless_uri` in SharedPreferences + import into MMKV.
+- On subsequent cold starts (known device): call `/provision` again, rate-limited to 30 min. This re-registers the UUID with Xray (handles server restarts) and fetches a fresh VLESS URI (handles server reassignment). Falls back to cached config if the backend is unreachable. `/provision` for a returning device is idempotent — "already exists" is swallowed on `addUser`.
 - Implement deep link handler for `vsemoionline://activate?token=ABC123`.
 - Implement domain fallback chain: last known → hardcoded → Gist/Worker → magic link.
 - Client UI elements:
@@ -150,7 +150,7 @@ No Docker Swarm — single VPS at this stage. Services managed by `docker-compos
   - ✅ Comparison table free-traffic cell wired dynamically to `PREF_TRAFFIC_TOTAL_GB` (from `traffic_cap_mb` in `/status`)
   - ✅ "Оплатить подписку", "Продлить подписку", "Личный кабинет" buttons open `cabinet_url` from backend; cabinet link hidden for free users
   - ✅ Animated toolbar/VPN area backgrounds (colour-cycling via `ValueAnimator.ofArgb`)
-  - ✅ App-open status refresh rate-limited to 30 min (`PREF_LAST_STATUS_POLL_MS`)
+  - ✅ App-open re-provision rate-limited to 30 min (`PREF_LAST_STATUS_POLL_MS`): re-registers UUID with Xray + fetches fresh VLESS URI; falls back to cached config on failure
 - ✅ `POST /admin/token` on client-backend — operator generates single-use activation tokens without DB access. Body: `{ xray_uuid, days, expires_hours? }`. Returns `token`, `activation_url`, `expires_at`.
 
 **Testable when**: Fresh device installs APK → calls `/provision` → gets throttled free-tier config → connects → browses at reduced speed. Operator issues token → deep link sent → user taps → account upgrades to paid → unthrottled.
@@ -202,45 +202,86 @@ Contract between Health Monitor and Orchestrator. Events fire on state **transit
 | `domain.rotated` | `{ old_domain, new_domain, server_id, timestamp }` |
 | `domain.rotate` | `{ server_id, reason, timestamp }` ← manual admin trigger |
 
-### 2.3 Health Monitor
+### 2.3 Health Monitor ✅
 
-Build second (after Orchestrator domain rotation is working).
+- ✅ `health-monitor/` service: Fastify on port 3003, ioredis pub, pg pool
+- ✅ Server reachability: TCP probe to `server.probe_host || server.ip` on port 8444 every 30s; 2 consecutive failures → `server.unreachable`; 2 consecutive successes → `server.healthy`
+- ✅ `probe_host` column on `servers` (migration `20260403120000-add-probe-host.js`): set to Docker service name `xray` for local server; NULL for remote servers (falls back to `server.ip`)
+- ✅ Traffic checks: sums `getUserTrafficBytes` per device per server every 5 min; adds delta to `servers.traffic_used_mb`; publishes `server.draining` at ≥ 90%, `server.exhausted` at 100%; threshold checked every tick regardless of traffic delta
+- ✅ Monthly reset: on `traffic_resets_at`, zeros `traffic_used_mb`, advances date by 1 month, publishes `server.traffic_reset`, flips `exhausted` → `active`
+- ✅ Domain checks: HTTPS probe to `/{domain}/health` every 5 min; optional body token verification via `HEALTH_TOKEN` env; 2 consecutive failures → `domain.unreachable` (orchestrator subscribes and rotates)
+- ✅ Proto files reused from `client-backend/src/lib/proto` via Dockerfile COPY — no duplication
+- ✅ Deployed: `vsemoionline-backend-health-monitor-1`; secrets at `/opt/actions-runner-vsemoi/env/health-monitor.env`
+- ✅ GH Actions workflow: `.github/workflows/health-monitor.yml`
+- ✅ All 8 test scenarios passed (2026-04-03): server.unreachable, server.healthy, traffic accumulation, server.draining, server.exhausted, server.traffic_reset, domain.unreachable, healthy domain unaffected
 
-- **Server reachability**: TCP connect + HTTP probe to each active server's Xray port every 30s. Require 2 consecutive failures before publishing `server.unreachable`; require 2 consecutive successes before publishing `server.healthy`.
-- **Traffic checks**: Sum Xray gRPC user stats per server every 5 min; update `server_metrics` and `servers.traffic_used_mb`. Publish `server.draining` at 90%, `server.exhausted` at 100%.
-- **Monthly reset**: On `traffic_resets_at`, zero out `traffic_used_mb`, publish `server.traffic_reset`, flip state to `active`.
-- **Domain checks**: HTTP probe with body token verification (detects hijacking, not just 200 OK).
-- **No CPU/RAM monitoring** in Phase 2 — traffic cap is the binding constraint on Type-A servers.
+### 2.4 Orchestrator: Domain Rotation ✅
 
-### 2.4 Orchestrator: Domain Rotation
+- ✅ `orchestrator/` service: Fastify on port 3002, ioredis pub/sub, pg pool
+- ✅ `POST /admin/rotate-domain` — body: `{ server_id }` or `{ domain }`; header: `x-admin-secret`
+- ✅ Subscribes to `domain.unreachable` and `domain.rotate` Redis topics
+- ✅ Picks next `standby` domain for the server, marks old `dead` / new `active` in a single DB transaction
+- ✅ Updates GitHub Gist (`GIST_ID` + `GITHUB_TOKEN` env vars) with `https://{new_domain}/provision`
+- ✅ Publishes `domain.rotated` to Redis
+- ✅ Per-server cooldown enforced in memory (`DOMAIN_ROTATION_COOLDOWN_MINUTES`)
+- ✅ Deployed: `vsemoionline-backend-orchestrator-1`; secrets at `/opt/actions-runner-vsemoi/env/orchestrator.env`
+- ✅ GH Actions workflow: `.github/workflows/orchestrator.yml`
+- ✅ Android: Gist URL hash removed from `MainActivity.kt` — client now always reads latest Gist revision
+- ✅ Migration `20260402135944-phase2-schema.js` applied: `domain_names` gains `standby` status; `servers` gains `traffic_cap_mb`, `traffic_used_mb`, `traffic_resets_at`, `tc_agent_url`; `servers.status` extended with `exhausted`, `unreachable`
 
-Build first (testable without Kamatera or Health Monitor — use manual admin trigger).
+### 2.5 Orchestrator: Server Scaling ✅ (bootstrap test complete 2026-04-05)
 
-- Subscribe to `domain.unreachable` (from Health Monitor) and `domain.rotate` (manual admin trigger via `POST /admin/rotate-domain`).
-- Pick next domain from pool in `domain_names` table (status = 'standby'). All standby domains are pre-bought with A records already pointing at the VPS — no DNS API call needed.
-- Mark old domain `dead`, new domain `active` in `domain_names`.
-- Update GitHub Gist with new domain URL.
-- Publish `domain.rotated`.
-- `/status` already returns `current_domain` — clients pick it up on next poll.
-- Cooldown: no more than one rotation per server per `DOMAIN_ROTATION_COOLDOWN_MINUTES` (env var).
+- ✅ `orchestrator/src/providers/kamatera.js` — `{ provisionServer, terminateServer, listServers }`. Bearer token auth with caching, async queue polling.
+- ✅ `orchestrator/src/lib/placement.js` — `PlacementPolicy` class. Provider-agnostic `getSpec(context)` → `{ provider, spec }`. Phase 2.5 = static env vars. Designed for multi-zone / multi-provider extension.
+- ✅ `orchestrator/src/lib/bootstrap.js` — SSH via `ssh2`, uploads Xray config + tc-agent files via SFTP, runs `infra/bootstrap-xray.sh`.
+- ✅ `infra/bootstrap-xray.sh` — idempotent Ubuntu 24.04 setup: Docker (with log rotation), Node.js, journald size cap, ufw firewall, Xray container, tc-agent systemd service.
+- ✅ `orchestrator/src/lib/scaling.js` — event handlers: `server.draining` → assess headroom → provision if < `CAPACITY_MIN_MB`. `server.unreachable` → drain only (no decommission — paid monthly). `server.exhausted` → drain + assess + provision. `server.healthy` → re-activate if watchlisted.
+- ✅ Migration `20260404000000-add-kamatera-id.js` — adds `servers.kamatera_id`, `servers.xray_grpc_addr`.
+- ✅ `health-monitor/src/lib/traffic-checker.js` — `getServerGrpcAddr` reads `server.xray_grpc_addr` (NULL → env fallback for local Docker server).
+- ✅ Admin endpoints: `POST /admin/provision-server`, `POST /admin/drain-server`, `GET /admin/capacity`.
+- ✅ Target spec: EU-FR, ubuntu_server_24.04_64-bit, 1A CPU, 1 GB RAM, 20 GB disk, monthly, t5000.
+- ✅ Bootstrap test passed 2026-04-05 on EU-FR hourly server (185.181.10.161, since terminated). Fixed: `xray run` → `run` (image ENTRYPOINT is already `xray`); added `npm install` step before tc-agent start.
+- ✅ API end-to-end test passed 2026-04-06: `POST /admin/provision-server` provisioned server 2 (63.250.59.47, kamatera_id: e767529f-0da3-446a-9f0a-84aa95c1403d). Multi-server `/provision` routing confirmed.
+- ✅ DB state: server 1 = Молдова, Кишинёв (Ziplex); server 2 = Германия, Франкфурт (Kamatera EU-FR). Both `tier='both'`, `status='active'`.
 
-### 2.5 Orchestrator: Server Scaling
+**Design decisions recorded:**
+- Shared Reality key pair across all servers (`XRAY_PRIVATE_KEY`) — simpler; each server uses the same public key in VLESS URIs. Future improvement: per-server key pair + `xray_public_key` column.
+- `server.unreachable` does NOT trigger decommission — server is paid for monthly; drain + watchlist + re-activate on recovery is safer.
+- `PlacementPolicy` is the extension point for: multi-zone awareness, IP-blocking pre-check (provision hourly → probe from Russian IP → commit or retry), multi-provider support.
+- `TC_AGENT_URL` per-server lookup in client-backend (`status.js`, `admin.js`) is a separate TODO for when a second server is live.
 
-Build third (after Health Monitor).
+### 2.6 Zone-Based Server Selection (next to build)
 
-- Subscribe to `server.draining` (provision additional server) and `server.unreachable` (drain + replace).
-- On provision: call Kamatera API (Bearer token auth — exchange clientId+secret via POST /authenticate first), run bootstrap script, register in `servers` table with `traffic_resets_at` = provisioned_at + 1 month.
-- Bootstrap script: installs Docker, deploys Xray container, installs tc agent. Must be idempotent. **Test manually before automating.**
-- On drain: reassign devices in DB → affected clients get new server on next `/status` poll.
-- On `server.exhausted`: no new provisioning — server idles until `server.traffic_reset`.
-- **Provider abstraction layer**: `providers/kamatera.js` implements `{ provisionServer, terminateServer, listServers }`. Core orchestration logic never imports Kamatera directly.
+**Design decisions (finalized 2026-04-06):**
+- UI shows zones (city-level labels), not individual servers. `servers.display_name` stores the Russian zone label.
+- Free users: backend auto-assigns server; zones visible in dropdown but tapping shows upsell dialog.
+- Paid users: can select any zone; backend picks healthiest `active` server in that zone.
+- `tier` column is NOT used for client-facing zone filtering — both current servers are `'both'`.
+- Server change flow: Android → `POST /servers/select { zone }` → backend does gRPC migration (RemoveUser old server, AddUser new server, update `devices.assigned_server_id`) → returns new VLESS URI → Android stores URI and reconnects.
 
-### 2.6 Swarm Multi-Node Prep
+**Backend tasks:**
+- `GET /zones` (or update `GET /servers`): return zone-grouped list `[{ zone, region, available }]`. Do not expose server IPs or IDs.
+- Consider adding `servers.region` column (e.g. `'EU-MD'`, `'EU-FR'`) as a stable zone key (migration needed).
+- `POST /servers/select`: body `{ zone }`, headers `x-device-fingerprint` + `x-android-id`. Verify paid plan, find healthiest server in zone, gRPC-migrate UUID, update DB, return `{ ok, vless_uri }`. Free user → 403 `upgrade_required`. No active server → 503 `zone_unavailable`.
+
+**Android tasks:**
+- Call `GET /zones` on resume; populate zone dropdown in `MainViewModel`.
+- Free user taps zone → upsell `AlertDialog` → button opens `cabinet_url`.
+- Paid user taps zone → call `POST /servers/select` → on success store VLESS URI + reconnect; on error show dialog.
+- Highlight currently connected zone.
+
+### 2.7 Phase 2 Pending Items
+
+- **Zone-based server selection** — see §2.6 above. Backend + Android. Handoff doc: `HANDOFF_server_selection.md`.
+- **Multi-server throttle**: `TC_AGENT_URL` in `status.js` and `admin.js` is a single env var. Fix: look up `servers.tc_agent_url` for `device.assigned_server_id` and use that. Needed now that server 2 is live.
+- **Real-time speed ring**: hook `MainViewModel` speed tracking into donut ring animation.
+
+### 2.8 Swarm Multi-Node Prep
 
 - Add placement constraints to `swarm-stack.yml` so Xray containers are pinned to their VPS nodes by label.
 - tc agent installation is part of the server bootstrap script (not Swarm-managed).
 
-**Build order**: Orchestrator domain rotation → Health Monitor → Orchestrator server scaling.
+**Build order**: ~~Orchestrator domain rotation~~ ✅ → ~~Health Monitor~~ ✅ → ~~Orchestrator server scaling~~ ✅ → Zone-based server selection → Multi-server throttle.
 
 **Testable when**: Trigger `POST /admin/rotate-domain` → Gist updated → client picks up new domain on next poll. Kill an Xray container → Health Monitor detects → Orchestrator drains → clients get new server. Server hits 90% traffic → `server.draining` → new Kamatera VPS provisions.
 
@@ -272,7 +313,7 @@ Complete the placeholder pages from Phase 1 with real YooKassa redirect flow. Pa
 - `POST /users` — create sub-user, return activation deep link token.
 - `GET /users` — list sub-users with days allocated.
 - `POST /users/:id/allocate` — redistribute days.
-- Constraint: total allocated days ≤ `accounts.paid_days_remaining`.
+- Constraint: total allocated days ≤ remaining days derived from `accounts.paid_until`.
 - Constraint: 1 concurrent connection per sub-user.
 
 ### 3.4 Paid Concurrency Enforcement

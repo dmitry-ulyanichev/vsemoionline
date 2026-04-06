@@ -1,8 +1,136 @@
 # Technical Implementation Notes
 
+---
+
+## Updates (2026-04-04) — §2.5 Orchestrator: Server Scaling (code complete)
+
+### New files
+- `orchestrator/src/providers/kamatera.js` — Kamatera Cloud API client (token cache, queue poll, provisionServer / terminateServer / listServers)
+- `orchestrator/src/lib/placement.js` — `PlacementPolicy` class; provider-agnostic provisioning spec; designed for future multi-zone / multi-provider extension
+- `orchestrator/src/lib/bootstrap.js` — SSH bootstrap runner (`ssh2`): uploads Xray config + tc-agent source via SFTP, runs `infra/bootstrap-xray.sh`
+- `infra/bootstrap-xray.sh` — idempotent Ubuntu 24.04 VPN server setup script
+- `orchestrator/src/lib/scaling.js` — scaling event handlers, capacity assessment (traffic headroom), device drain/reassign, `provisionNewServer` flow
+
+### Modified files
+- `orchestrator/src/app.js` — subscribed to `server.draining`, `server.exhausted`, `server.unreachable`, `server.healthy`
+- `orchestrator/src/routes/admin.js` — added `POST /admin/provision-server`, `POST /admin/drain-server`, `GET /admin/capacity`
+- `orchestrator/.env.example` — documented all new env vars (Kamatera creds, provisioning spec, SSH key path, bootstrap config)
+- `orchestrator/package.json` — added `ssh2` dependency
+- `infra/docker/orchestrator.Dockerfile` — copies bootstrap dependencies (config template, shell script, tc-agent source) into image
+- `health-monitor/src/lib/traffic-checker.js` — `getServerGrpcAddr` now uses `server.xray_grpc_addr` from DB (NULL falls back to env for local Docker server)
+
+### Migration
+- `client-backend/migrations/20260404000000-add-kamatera-id.js` — adds `servers.kamatera_id VARCHAR(64)` and `servers.xray_grpc_addr VARCHAR(255)`
+
+### Bootstrap script details
+The `infra/bootstrap-xray.sh` script (run via SSH on fresh Ubuntu 24.04 servers) does:
+1. Disables snapd and unattended-upgrades
+2. Installs Docker, iproute2, netcat, Node.js (via NodeSource)
+3. Configures Docker log rotation (10 MB × 3 files) and journald cap (50 MB)
+4. Configures ufw: VPN ports open; gRPC (8080) and tc-agent (9000) restricted to `MANAGER_IP` only
+5. Starts Xray container from `ghcr.io/xtls/xray-core:latest` with pre-generated `config.json`
+6. Starts tc-agent as a systemd service
+
+**Status**: code complete; manual test on a real Kamatera server required before automation is enabled.
+
+---
+
+## Updates (2026-04-05) — Provisioning resilience + error UX
+
+### Root cause diagnosed: Cloudflare blocking
+`vmonl.store` resolves to Cloudflare proxy IPs (`188.114.96.5/97.5`), not the VPS directly (`103.241.67.124`). After a redeploy, Cloudflare entered "Under Attack" mode and silently dropped all TCP connections — nginx was running fine but unreachable. Fix: pause+unpause in Cloudflare dashboard. Prevention: keep the GitHub Gist updated with the direct VPS IP so the fallback chain can bypass Cloudflare when it fails.
+
+### Android: provisioning fallback chain extended to known devices
+**File**: `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`
+
+Previously, the two-cycle fallback chain (last working URL → primary URL → Gist → other platform URLs) was only used for fresh (unprovisioned) devices. Known devices (stored UUID) used a single URL with no fallback — so a Cloudflare outage made reconnection impossible even though the Gist could have provided a working endpoint.
+
+**Changes**:
+- Extracted core two-cycle loop into `runProvisionFallbackChain(): Boolean` (private suspend fun). All callers delegate to it.
+- `provisionThenConnect()` (VPN button tap, known device) — now uses full chain instead of one-shot attempt.
+- `checkAndAutoProvision()` (app open, known device) — falls through to full chain if primary URL fails.
+- `tryProvisioningWithFallback()` (fresh device, first launch) — simplified to delegate to same chain.
+
+### Android: VPN button no longer starts VPN when provisioning fails
+**File**: `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`
+
+Previously `provisionThenConnect()` always called `startV2Ray()` regardless of provision outcome. The button would turn green but traffic was rejected by Xray (UUID not registered). Now `startV2Ray()` is only called on success; on failure an `AlertDialog` is shown.
+
+Fresh-device path also fixed: previously a null UUID caused an immediate `startV2Ray()` (→ "Select a configuration" legacy toast). It now runs the full fallback chain first.
+
+### Android: provisioning error — dialog replaces toast, message improved
+**Files**: `MainActivity.kt`, `values/strings.xml`, `values-ru/strings.xml`
+
+- `toastError(R.string.provisioning_failed_message)` replaced with `showProvisioningFailedDialog()` — stays on screen until dismissed.
+- Background provisioning failure (`tryProvisioningWithFallback` on app open) no longer shows any dialog — it fails silently. The user is only informed when they explicitly tap the VPN button.
+- Message updated from "check your internet connection" (misleading — could be server-side) to "VPN service is temporarily unavailable… contact support if persists".
+- New `provisioning_failed_title` string added in English ("Could not connect") and Russian ("Нет подключения").
+
+---
+
+## Updates (2026-04-05) — Russian plural fix for days remaining
+
+### Modified files
+- `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt` — replaced `getQuantityString(R.plurals.vsm_days_remaining, …)` with `formatDaysRu(n)`, a helper that hardcodes Russian plural rules (11–14 → дней; ends in 1 → день; ends in 2–4 → дня; else → дней). `getQuantityString` selects forms based on the device locale, so it produced wrong results on non-Russian-locale devices.
+- `V2rayNG/app/src/main/res/values-ru/strings.xml` — added `vsm_days_remaining` plurals entry (kept for completeness; no longer used in the primary display path).
+
+---
+
 **Project**: VseMoiOnline (v2rayNG Fork)
 
 This document contains detailed technical information for developers working on VseMoiOnline. For user-facing documentation, see README.md. For change history, see CHANGELOG.md.
+
+---
+
+## Updates (2026-04-03) — Subscription expiry + pre-connect provision
+
+### Backend: paid_until replaces paid_days_remaining
+**Files**: `client-backend/migrations/20260403130000-paid-until.js`, `activate.js`, `status.js`, `provision.js`
+
+`accounts.paid_days_remaining` (static counter, never decremented) replaced with `paid_until TIMESTAMPTZ`.
+
+**Why**: The old counter only changed when a token was activated or manually updated in the DB. It never counted down, so clients would see a stale number indefinitely.
+
+**How it works now**:
+- `/status` and `/provision` compute `days_remaining = Math.ceil((paid_until - now) / 86400000)`, clamped to 0. No cron job needed — the value decays automatically.
+- Activation: `paid_until = GREATEST(COALESCE(paid_until, NOW()), NOW()) + N days`. Handles fresh accounts, active subscriptions (stacking), and expired accounts correctly.
+- Android client receives the same `days_remaining` integer field — no client changes required.
+
+**Migration**: existing `paid_days_remaining` values converted to `paid_until = NOW() + N days` at migration time.
+
+### Android: pre-connect re-provision (provisionThenConnect)
+**File**: `MainActivity.kt` — `provisionThenConnect()`, FAB click handler, `requestVpnPermission` callback
+
+When the user taps the FAB to connect, `/provision` is called (3 s timeout) before `startV2Ray()`.
+
+**Why**: When Xray restarts mid-session, the UUID is wiped from its in-memory list. The user notices traffic stops, disconnects, then reconnects. Without this, the reconnect would fail silently (Xray rejects the unregistered UUID at the VLESS protocol level — V2rayNG shows "connected" but no traffic flows). With this, the reconnect re-registers the UUID first.
+
+**Behaviour**: on success, imports fresh VLESS URI and resets the cold-start rate-limit clock. On failure (backend unreachable), falls through to `startV2Ray()` with cached config — best effort.
+
+---
+
+## Updates (2026-04-03) — Provisioning robustness + speed dial fix
+
+### Android: app-open re-provision replaces status poll
+**File**: `MainActivity.kt` — `checkAndAutoProvision()`
+
+The previous behaviour (status-poll-only on app open) was replaced with a full `/provision` call, rate-limited to 30 min via `PREF_LAST_STATUS_POLL_MS`.
+
+**Why**: Xray's user list is in-memory. Any Xray restart (crash, redeploy, future server migration) wipes all registered UUIDs. Without a `/provision` call the client would attempt to connect with an unregistered UUID and fail silently. The status-poll-only approach also could not handle server reassignment (a different server IP in the VLESS URI).
+
+**Behaviour**:
+- Known device, elapsed ≥ 30 min: calls `/provision` with `PROVISION_TIMEOUT_QUICK_MS` (3 s). On success: fresh VLESS URI imported + status updated + timestamp saved. On failure: falls back to cached config so the user can still attempt a connection.
+- Known device, elapsed < 30 min: re-imports VLESS URI from SharedPreferences into MMKV if MMKV was cleared; otherwise no-op.
+- Fresh device (no stored UUID): unchanged — `tryProvisioningWithFallback()`.
+
+The `/provision` endpoint for a returning device is idempotent (`addUser` "already exists" is swallowed), so calling it on every cold start is safe.
+
+### Backend: speed dial fix for paid tier
+**File**: `client-backend/.env.example`
+
+`PAID_TIER_THROTTLE_MBPS` corrected from `0` to `25`. Setting it to `0` meant "no throttle" to the operator but was treated as a literal 0 Mbps fallback by `status.js` when the tc-agent has no tc class for the paid port (normal — paid users are unthrottled by tc). The Android client received `throttle_mbps: 0.0` and displayed "–" in the speed ring instead of 25 Mbps.
+
+**Live fix**: change `PAID_TIER_THROTTLE_MBPS=0` → `25` in `/opt/actions-runner-vsemoi/env/client-backend.env` and `docker compose restart client-backend`.
 
 ---
 
@@ -58,10 +186,10 @@ Small badge shown inside the subscription header row when `layoutSubBody` is not
 
 `binding.tvSubChevron.animate().rotation(...).setDuration(200).start()` replaces the text swap `"∨"`/`"∧"`. `tvSubChevron` changed from `TextView` to `ImageView` using the new vector drawable.
 
-### Android: app-open status refresh (rate-limited 30 min)
+### Android: app-open status refresh (rate-limited 30 min) — superseded 2026-04-03
 **File**: `MainActivity.kt` — `checkAndAutoProvision()`, `PREF_LAST_STATUS_POLL_MS`
 
-When the existing server list has exactly 1 entry (normal returning user), a `/status` poll is now triggered if `System.currentTimeMillis() - PREF_LAST_STATUS_POLL_MS >= 30 * 60 * 1000`. Poll runs on `Dispatchers.IO` in a `lifecycleScope.launch`. On success, `PREF_LAST_STATUS_POLL_MS` is updated. Post-provision poll also saves the timestamp. Prevents subscription header from showing stale days after the user hasn't opened the app for hours.
+Original implementation: when `serverList.size == 1`, triggered a `/status` poll if 30 min had elapsed. Superseded by the full re-provision approach documented above (2026-04-03), which covers status refresh as a side effect while also fixing Xray UUID registration and server reassignment.
 
 ### Android: cabinet link visibility
 `tvSubLink` (Личный кабинет) is now hidden for free users (`View.GONE`) — it was always shown before. Night-mode variant uses `pill_link_bg_dark` drawable applied in `setupVsmUi()`.

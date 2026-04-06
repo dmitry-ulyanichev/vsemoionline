@@ -77,6 +77,8 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         private const val PREF_THROTTLE_MBPS = "throttle_mbps"
         private const val PREF_CABINET_URL = "cabinet_url"
         private const val PREF_LAST_STATUS_POLL_MS = "last_status_poll_ms"
+        private const val PREF_SERVER_ZONE = "server_zone"
+        private const val PREF_SERVER_REGION = "server_region"
 
         private const val STATUS_POLL_INTERVAL_MS = 30 * 60 * 1000L // 30 minutes
 
@@ -88,7 +90,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
 
         // Fallback platform URLs - return plain text with current provisioning domain/IP
         private val FALLBACK_PLATFORM_URLS = listOf(
-            "https://gist.githubusercontent.com/dmitry-ulyanichev/0b552cd7f00f8735f8a4832321825162/raw/a1592ec7783bd7c5248a19892779aa199feddd64/endpoint.txt"
+            "https://gist.githubusercontent.com/dmitry-ulyanichev/0b552cd7f00f8735f8a4832321825162/raw/endpoint.txt"
 //            "https://raw.githubusercontent.com/YOUR_USERNAME/provision/main/endpoint.txt",
 //            "https://YOUR_WORKER.YOUR_SUBDOMAIN.workers.dev/provision",
 //            "https://YOUR_PROJECT.vercel.app/api/provision",
@@ -99,9 +101,11 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         )
     }
 
+    private data class ZoneItem(val zone: String, val region: String, val available: Boolean)
+
     internal val requestVpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (it.resultCode == RESULT_OK) {
-            startV2Ray()
+            provisionThenConnect()
         }
     }
     private val requestSubSettingActivity = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -203,12 +207,12 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
                 if ((MmkvManager.decodeSettingsString(AppConfig.PREF_MODE) ?: VPN) == VPN) {
                     val intent = VpnService.prepare(this)
                     if (intent == null) {
-                        startV2Ray()
+                        provisionThenConnect()
                     } else {
                         requestVpnPermission.launch(intent)
                     }
                 } else {
-                    startV2Ray()
+                    provisionThenConnect()
                 }
             }
         }
@@ -441,129 +445,106 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     }
 
     /**
-     * VseMoiOnline: Try provisioning with fallback URLs using two-cycle approach
-     *
-     * Cycle 1 (Quick scan - 3s timeout):
-     *   - Tries all URLs quickly to find working endpoints fast
-     *
-     * Cycle 2 (Patient retry - 10s timeout):
-     *   - Only retries URLs that timed out in Cycle 1
-     *   - Shows user-friendly message to maintain patience
+     * VseMoiOnline: Core two-cycle provisioning fallback chain.
      *
      * Priority order:
      * 1. Last working URL (if exists)
      * 2. Primary hardcoded URL
      * 3. Fallback platform URLs (which return the current provisioning endpoint)
+     *
+     * Cycle 1 (Quick scan): tries all URLs with PROVISION_TIMEOUT_QUICK_MS.
+     * Cycle 2 (Patient retry): retries only URLs that timed out in Cycle 1.
+     *
+     * Must be called from an IO-dispatcher coroutine. Returns true if any URL succeeded.
+     */
+    private suspend fun runProvisionFallbackChain(): Boolean {
+        val urlsToTry = mutableListOf<Pair<String, Boolean>>()
+        getLastWorkingProvisionUrl()?.let {
+            urlsToTry.add(it to true)
+            Log.i(AppConfig.TAG, "VseMoiOnline: Will try last working URL first: $it")
+        }
+        urlsToTry.add(PRIMARY_PROVISION_URL to true)
+        FALLBACK_PLATFORM_URLS.forEach { urlsToTry.add(it to false) }
+
+        Log.i(AppConfig.TAG, "VseMoiOnline: Starting Cycle 1 - quick scan (${PROVISION_TIMEOUT_QUICK_MS}ms timeout)")
+        var success = false
+        val timedOutUrls = mutableListOf<Pair<String, Boolean>>()
+
+        for ((url, isDirect) in urlsToTry) {
+            if (success) break
+            try {
+                Log.i(AppConfig.TAG, "VseMoiOnline: Cycle 1 - Attempting provisioning from: $url")
+                val provisionUrl = if (isDirect) url else fetchProvisioningEndpoint(url, PROVISION_TIMEOUT_QUICK_MS)
+                if (provisionUrl != null) {
+                    val result = fetchAndImportConfig(provisionUrl, PROVISION_TIMEOUT_QUICK_MS)
+                    if (result) {
+                        success = true
+                        saveLastWorkingProvisionUrl(provisionUrl)
+                        Log.i(AppConfig.TAG, "VseMoiOnline: Cycle 1 - Provisioning succeeded from: $url")
+                    }
+                }
+            } catch (e: java.net.SocketTimeoutException) {
+                Log.w(AppConfig.TAG, "VseMoiOnline: Cycle 1 - Timeout from $url, will retry in Cycle 2")
+                timedOutUrls.add(url to isDirect)
+            } catch (e: Exception) {
+                Log.w(AppConfig.TAG, "VseMoiOnline: Cycle 1 - Failed from $url: ${e.message}")
+            }
+        }
+
+        if (!success && timedOutUrls.isNotEmpty()) {
+            withContext(Dispatchers.Main) { toast(R.string.provisioning_retry_message) }
+            Log.i(AppConfig.TAG, "VseMoiOnline: Starting Cycle 2 - patient retry (${PROVISION_TIMEOUT_PATIENT_MS}ms timeout) for ${timedOutUrls.size} URLs")
+            for ((url, isDirect) in timedOutUrls) {
+                if (success) break
+                try {
+                    Log.i(AppConfig.TAG, "VseMoiOnline: Cycle 2 - Retrying provisioning from: $url")
+                    val provisionUrl = if (isDirect) url else fetchProvisioningEndpoint(url, PROVISION_TIMEOUT_PATIENT_MS)
+                    if (provisionUrl != null) {
+                        val result = fetchAndImportConfig(provisionUrl, PROVISION_TIMEOUT_PATIENT_MS)
+                        if (result) {
+                            success = true
+                            saveLastWorkingProvisionUrl(provisionUrl)
+                            Log.i(AppConfig.TAG, "VseMoiOnline: Cycle 2 - Provisioning succeeded from: $url")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(AppConfig.TAG, "VseMoiOnline: Cycle 2 - Failed from $url: ${e.message}")
+                }
+            }
+        }
+
+        return success
+    }
+
+    private fun showProvisioningFailedDialog() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.provisioning_failed_title)
+            .setMessage(R.string.provisioning_failed_message)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+    }
+
+    /**
+     * VseMoiOnline: Try provisioning with fallback URLs using two-cycle approach.
+     * Used for fresh (unprovisioned) devices on first launch.
      */
     private fun tryProvisioningWithFallback() {
-        // Prevent duplicate provisioning attempts
         if (isProvisioningInProgress) {
             Log.i(AppConfig.TAG, "VseMoiOnline: Provisioning already in progress, skipping")
             return
         }
-
         isProvisioningInProgress = true
         binding.pbWaiting.show()
-
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val urlsToTry = mutableListOf<Pair<String, Boolean>>()
-
-                // Priority 1: Last working URL
-                getLastWorkingProvisionUrl()?.let {
-                    urlsToTry.add(it to true) // true = direct provisioning URL
-                    Log.i(AppConfig.TAG, "VseMoiOnline: Will try last working URL first: $it")
-                }
-
-                // Priority 2: Primary URL
-                urlsToTry.add(PRIMARY_PROVISION_URL to true)
-
-                // Priority 3: Fallback platforms
-                FALLBACK_PLATFORM_URLS.forEach { platformUrl ->
-                    urlsToTry.add(platformUrl to false) // false = platform URL, needs fetching
-                }
-
-                // CYCLE 1: Quick scan with 3s timeout
-                Log.i(AppConfig.TAG, "VseMoiOnline: Starting Cycle 1 - quick scan (${PROVISION_TIMEOUT_QUICK_MS}ms timeout)")
-                var success = false
-                val timedOutUrls = mutableListOf<Pair<String, Boolean>>()
-
-                for ((url, isDirect) in urlsToTry) {
-                    if (success) break
-
-                    try {
-                        Log.i(AppConfig.TAG, "VseMoiOnline: Cycle 1 - Attempting provisioning from: $url")
-
-                        val provisionUrl = if (isDirect) {
-                            url
-                        } else {
-                            // Fetch the actual provisioning endpoint from the platform
-                            fetchProvisioningEndpoint(url, PROVISION_TIMEOUT_QUICK_MS)
-                        }
-
-                        if (provisionUrl != null) {
-                            val result = fetchAndImportConfig(provisionUrl, PROVISION_TIMEOUT_QUICK_MS)
-                            if (result) {
-                                success = true
-                                saveLastWorkingProvisionUrl(provisionUrl)
-                                Log.i(AppConfig.TAG, "VseMoiOnline: Cycle 1 - Provisioning succeeded from: $url")
-                                break
-                            }
-                        }
-                    } catch (e: java.net.SocketTimeoutException) {
-                        Log.w(AppConfig.TAG, "VseMoiOnline: Cycle 1 - Timeout from $url, will retry in Cycle 2")
-                        timedOutUrls.add(url to isDirect)
-                    } catch (e: Exception) {
-                        Log.w(AppConfig.TAG, "VseMoiOnline: Cycle 1 - Failed from $url: ${e.message}")
-                        // Don't retry non-timeout errors (HTTP errors, etc.)
-                    }
-                }
-
-                // CYCLE 2: Patient retry for timed-out URLs only
-                if (!success && timedOutUrls.isNotEmpty()) {
-                    // Show encouraging message to user
-                    withContext(Dispatchers.Main) {
-                        toast(R.string.provisioning_retry_message)
-                    }
-
-                    Log.i(AppConfig.TAG, "VseMoiOnline: Starting Cycle 2 - patient retry (${PROVISION_TIMEOUT_PATIENT_MS}ms timeout) for ${timedOutUrls.size} URLs")
-
-                    for ((url, isDirect) in timedOutUrls) {
-                        if (success) break
-
-                        try {
-                            Log.i(AppConfig.TAG, "VseMoiOnline: Cycle 2 - Retrying provisioning from: $url")
-
-                            val provisionUrl = if (isDirect) {
-                                url
-                            } else {
-                                fetchProvisioningEndpoint(url, PROVISION_TIMEOUT_PATIENT_MS)
-                            }
-
-                            if (provisionUrl != null) {
-                                val result = fetchAndImportConfig(provisionUrl, PROVISION_TIMEOUT_PATIENT_MS)
-                                if (result) {
-                                    success = true
-                                    saveLastWorkingProvisionUrl(provisionUrl)
-                                    Log.i(AppConfig.TAG, "VseMoiOnline: Cycle 2 - Provisioning succeeded from: $url")
-                                    break
-                                }
-                            }
-                        } catch (e: Exception) {
-                            Log.w(AppConfig.TAG, "VseMoiOnline: Cycle 2 - Failed from $url: ${e.message}")
-                        }
-                    }
-                }
-
+                val success = runProvisionFallbackChain()
                 withContext(Dispatchers.Main) {
                     if (!success) {
-                        Log.e(AppConfig.TAG, "VseMoiOnline: All provisioning URLs failed after both cycles")
-                        toastError(R.string.provisioning_failed_message)
+                        Log.e(AppConfig.TAG, "VseMoiOnline: Background provisioning failed silently — user will be informed on connect")
                     }
                     binding.pbWaiting.hide()
                 }
             } finally {
-                // Always clear the flag, even if an exception occurred
                 isProvisioningInProgress = false
             }
         }
@@ -652,6 +633,15 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
                 val cabinetUrl = if (json.isNull("cabinet_url")) null else json.getString("cabinet_url")
 
                 saveProvisionData(xrayUuid, plan, vlessUri, provisionUrl, cabinetUrl)
+                val provZone   = if (json.isNull("zone"))   null else json.optString("zone")
+                val provRegion = if (json.isNull("region")) null else json.optString("region")
+                if (provZone != null || provRegion != null) {
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().apply {
+                        if (provZone   != null) putString(PREF_SERVER_ZONE,   provZone)
+                        if (provRegion != null) putString(PREF_SERVER_REGION, provRegion)
+                        apply()
+                    }
+                }
                 Log.i(AppConfig.TAG, "VseMoiOnline: Provisioned — plan=$plan, importing config")
 
                 // Immediately fetch status so days_remaining/traffic are populated before UI renders
@@ -671,6 +661,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
                     toast(R.string.toast_success)
                     updateSubscriptionHeader()
                     updateSubBlock()
+                    updateServerRow()
                 }
                 true
             } else {
@@ -831,6 +822,53 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         V2RayServiceManager.startVService(this)
     }
 
+    /**
+     * VseMoiOnline: Re-provision before connecting to ensure the UUID is registered with Xray.
+     * Handles mid-session Xray restarts: user notices traffic stopped → disconnects → taps connect
+     * → UUID re-registered → VPN starts. Falls back to cached config if backend unreachable.
+     */
+    private fun provisionThenConnect() {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val storedUuid = prefs.getString(PREF_XRAY_UUID, null)
+        binding.pbWaiting.show()
+        if (storedUuid == null) {
+            // Fresh device — background provisioning hasn't succeeded yet; try now explicitly.
+            lifecycleScope.launch(Dispatchers.IO) {
+                val success = try {
+                    runProvisionFallbackChain()
+                } catch (e: Exception) {
+                    Log.w(AppConfig.TAG, "VseMoiOnline: Pre-connect provision failed for fresh device: ${e.message}")
+                    false
+                }
+                withContext(Dispatchers.Main) {
+                    binding.pbWaiting.hide()
+                    if (success) startV2Ray() else showProvisioningFailedDialog()
+                }
+            }
+            return
+        }
+        lifecycleScope.launch(Dispatchers.IO) {
+            val success = try {
+                runProvisionFallbackChain()
+            } catch (e: Exception) {
+                Log.w(AppConfig.TAG, "VseMoiOnline: Pre-connect provision failed: ${e.message}")
+                false
+            }
+            if (success) {
+                prefs.edit().putLong(PREF_LAST_STATUS_POLL_MS, System.currentTimeMillis()).apply()
+            }
+            withContext(Dispatchers.Main) {
+                binding.pbWaiting.hide()
+                if (success) {
+                    startV2Ray()
+                } else {
+                    Log.e(AppConfig.TAG, "VseMoiOnline: Pre-connect provision failed — not starting VPN")
+                    showProvisioningFailedDialog()
+                }
+            }
+        }
+    }
+
     private fun restartV2Ray() {
         if (mainViewModel.isRunning.value == true) {
             V2RayServiceManager.stopVService(this)
@@ -853,14 +891,15 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     }
 
     /**
-     * VseMoiOnline: Auto-provision if no servers configured.
+     * VseMoiOnline: Ensures the device is provisioned and the Xray user is registered.
      *
-     * Three cases:
-     * 1. Servers already in MMKV → nothing to do.
-     * 2. No servers, no stored xray_uuid → fresh device, full provisioning via fallback chain.
-     * 3. No servers, but xray_uuid + vless_uri stored → device is registered in the backend and
-     *    Xray, local MMKV was just cleared (reinstall / data wipe). Re-import the stored URI
-     *    directly without a network round-trip.
+     * On every cold start, for a known device, calls /provision (rate-limited to 30 min).
+     * This re-registers the UUID with Xray (handles restarts/redeploys on any server) and
+     * returns a fresh VLESS URI (handles server reassignment). Falls back to the cached
+     * config if the backend is unreachable. Within the rate-limit window the cached config
+     * is used directly; MMKV is re-populated from SharedPreferences if it was cleared.
+     *
+     * Fresh device (no stored UUID): full provisioning via two-cycle fallback chain.
      */
     private fun checkAndAutoProvision() {
         // Activation deep link takes ownership of provisioning — don't race it.
@@ -883,37 +922,57 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
             }
             mainViewModel.removeAllServer()
             // fall through to full provisioning below
-        } else if (serverList.size == 1) {
-            // Refresh status on app open so days_remaining is never stale, rate-limited to 30 min
-            val storedXrayUuid = prefs.getString(PREF_XRAY_UUID, null)
-            val lastPollMs = prefs.getLong(PREF_LAST_STATUS_POLL_MS, 0L)
-            val elapsed = System.currentTimeMillis() - lastPollMs
-            Log.i(AppConfig.TAG, "VseMoiOnline: App-open check — uuid=${storedXrayUuid?.take(8)} lastPollMs=$lastPollMs elapsed=${elapsed}ms limit=${STATUS_POLL_INTERVAL_MS}ms")
-            if (storedXrayUuid != null && elapsed >= STATUS_POLL_INTERVAL_MS) {
-                lifecycleScope.launch(Dispatchers.IO) {
-                    try {
-                        pollStatus(storedXrayUuid)
-                        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                            .putLong(PREF_LAST_STATUS_POLL_MS, System.currentTimeMillis())
-                            .apply()
-                        Log.i(AppConfig.TAG, "VseMoiOnline: App-open status poll complete")
-                    } catch (e: Exception) {
-                        Log.w(AppConfig.TAG, "VseMoiOnline: App-open status poll failed: ${e.message}")
-                    }
-                }
+        }
+
+        val storedXrayUuid = prefs.getString(PREF_XRAY_UUID, null)
+        val storedVlessUri = prefs.getString(PREF_VLESS_URI, null)
+
+        if (storedXrayUuid == null || storedVlessUri == null) {
+            // Fresh device — full provisioning via fallback chain.
+            Log.i(AppConfig.TAG, "VseMoiOnline: No servers configured, starting provisioning")
+            tryProvisioningWithFallback()
+            return
+        }
+
+        // Known device — re-provision on cold start, rate-limited to 30 min.
+        // Ensures the UUID is registered with Xray (handles restarts on any server instance)
+        // and the VLESS URI is current (handles server reassignment between sessions).
+        val lastPollMs = prefs.getLong(PREF_LAST_STATUS_POLL_MS, 0L)
+        val elapsed = System.currentTimeMillis() - lastPollMs
+        Log.i(AppConfig.TAG, "VseMoiOnline: App-open check — uuid=${storedXrayUuid.take(8)} elapsed=${elapsed}ms limit=${STATUS_POLL_INTERVAL_MS}ms")
+
+        if (elapsed < STATUS_POLL_INTERVAL_MS) {
+            // Within rate-limit window — re-import cached config into MMKV if it was cleared.
+            if (serverList.isEmpty()) {
+                Log.i(AppConfig.TAG, "VseMoiOnline: Within poll interval, re-importing stored config")
+                importBatchConfig(storedVlessUri)
             }
             return
         }
 
-        val storedVlessUri = prefs.getString(PREF_VLESS_URI, null)
-        val storedXrayUuid = prefs.getString(PREF_XRAY_UUID, null)
-
-        if (storedXrayUuid != null && storedVlessUri != null) {
-            Log.i(AppConfig.TAG, "VseMoiOnline: No servers in MMKV but provisioned before — re-importing stored config")
-            importBatchConfig(storedVlessUri)
-        } else {
-            Log.i(AppConfig.TAG, "VseMoiOnline: No servers configured, starting provisioning")
-            tryProvisioningWithFallback()
+        val provisionUrl = prefs.getString(PREF_LAST_WORKING_URL, null) ?: PRIMARY_PROVISION_URL
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                Log.i(AppConfig.TAG, "VseMoiOnline: App-open re-provision from $provisionUrl")
+                val success = fetchAndImportConfig(provisionUrl, PROVISION_TIMEOUT_QUICK_MS)
+                if (success) {
+                    prefs.edit().putLong(PREF_LAST_STATUS_POLL_MS, System.currentTimeMillis()).apply()
+                    saveLastWorkingProvisionUrl(provisionUrl)
+                    Log.i(AppConfig.TAG, "VseMoiOnline: App-open re-provision complete")
+                    return@launch
+                }
+                Log.w(AppConfig.TAG, "VseMoiOnline: App-open primary provision failed, trying fallback chain")
+            } catch (e: Exception) {
+                Log.w(AppConfig.TAG, "VseMoiOnline: App-open primary provision failed: ${e.message}, trying fallback chain")
+            }
+            // Primary URL failed — try the full fallback chain before giving up.
+            val fallbackSuccess = runProvisionFallbackChain()
+            if (!fallbackSuccess) {
+                Log.w(AppConfig.TAG, "VseMoiOnline: Re-provision failed, using cached config")
+                if (serverList.isEmpty()) {
+                    withContext(Dispatchers.Main) { importBatchConfig(storedVlessUri) }
+                }
+            }
         }
     }
 
@@ -1230,17 +1289,158 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     }
 
     private fun onServerRowTapped() {
-        val plan = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-            .getString(PREF_PLAN, "free")
-        if (plan == "free") {
+        val plan = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(PREF_PLAN, "free")
+        if (plan != "paid") {
             AlertDialog.Builder(this)
                 .setTitle(R.string.vsm_server_dialog_title)
                 .setMessage(R.string.vsm_server_dialog_body)
                 .setNegativeButton(R.string.vsm_server_dialog_cancel) { _, _ -> }
                 .setPositiveButton(R.string.vsm_server_dialog_cta) { _, _ -> openCabinetUrl() }
                 .show()
+            return
         }
-        // Paid multi-server selection: Phase 2
+        showZonePicker()
+    }
+
+    private fun showZonePicker() {
+        binding.pbWaiting.show()
+        lifecycleScope.launch(Dispatchers.IO) {
+            val zones = try { fetchZones() } catch (e: Exception) {
+                Log.w(AppConfig.TAG, "VseMoiOnline: fetchZones failed: ${e.message}")
+                null
+            }
+            withContext(Dispatchers.Main) {
+                binding.pbWaiting.hide()
+                if (zones.isNullOrEmpty()) {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setMessage(R.string.vsm_zone_switch_error)
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show()
+                    return@withContext
+                }
+                val currentRegion = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                    .getString(PREF_SERVER_REGION, null)
+                val labels = zones.map { z ->
+                    val flag      = regionToFlag(z.region)
+                    val connected = if (z.region == currentRegion)
+                        " — ${getString(R.string.vsm_zone_connected)}" else ""
+                    "$flag ${z.zone}$connected"
+                }.toTypedArray()
+                val currentIdx = zones.indexOfFirst { it.region == currentRegion }.takeIf { it >= 0 } ?: 0
+
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle(R.string.vsm_zone_picker_title)
+                    .setSingleChoiceItems(labels, currentIdx) { dialog, which ->
+                        dialog.dismiss()
+                        val selected = zones[which]
+                        if (selected.region != currentRegion) {
+                            switchZone(selected.region, selected.zone)
+                        }
+                    }
+                    .setNegativeButton(R.string.vsm_server_dialog_cancel, null)
+                    .show()
+            }
+        }
+    }
+
+    private suspend fun fetchZones(): List<ZoneItem> {
+        val baseUrl = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .getString(PREF_BACKEND_BASE_URL, null) ?: return emptyList()
+        val conn = java.net.URL("$baseUrl/zones").openConnection() as java.net.HttpURLConnection
+        conn.connectTimeout = 5000
+        conn.readTimeout    = 5000
+        val text = conn.inputStream.bufferedReader().readText()
+        conn.disconnect()
+        val arr = org.json.JSONArray(text)
+        return (0 until arr.length()).map { i ->
+            val obj = arr.getJSONObject(i)
+            ZoneItem(
+                zone      = obj.getString("zone"),
+                region    = obj.optString("region", ""),
+                available = obj.optBoolean("available", true)
+            )
+        }
+    }
+
+    private fun switchZone(region: String, zone: String) {
+        binding.pbWaiting.show()
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val fingerprint = getOrCreateDeviceId()
+                val baseUrl = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                    .getString(PREF_BACKEND_BASE_URL, null)
+                if (baseUrl == null) {
+                    withContext(Dispatchers.Main) {
+                        binding.pbWaiting.hide()
+                        AlertDialog.Builder(this@MainActivity)
+                            .setMessage(R.string.vsm_zone_switch_error)
+                            .setPositiveButton(android.R.string.ok, null)
+                            .show()
+                    }
+                    return@launch
+                }
+
+                val body = "{\"region\":\"$region\"}"
+                val conn = java.net.URL("$baseUrl/servers/select")
+                    .openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.doOutput      = true
+                conn.connectTimeout = 8000
+                conn.readTimeout    = 8000
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.setRequestProperty("x-device-fingerprint", fingerprint)
+                val androidId = getAndroidId()
+                if (androidId != null) conn.setRequestProperty("x-android-id", androidId)
+                conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+
+                val code = conn.responseCode
+                if (code == 200) {
+                    val json     = org.json.JSONObject(conn.inputStream.bufferedReader().readText())
+                    conn.disconnect()
+                    val vlessUri     = json.getString("vless_uri")
+                    val returnedZone = json.optString("zone", zone)
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                        .putString(PREF_VLESS_URI, vlessUri)
+                        .putString(PREF_SERVER_ZONE, returnedZone)
+                        .putString(PREF_SERVER_REGION, region)
+                        .apply()
+                    withContext(Dispatchers.Main) {
+                        binding.pbWaiting.hide()
+                        mainViewModel.removeAllServer()
+                        importBatchConfig(vlessUri)
+                        updateServerRow()
+                        restartV2Ray()
+                    }
+                } else if (code == 503) {
+                    conn.disconnect()
+                    withContext(Dispatchers.Main) {
+                        binding.pbWaiting.hide()
+                        AlertDialog.Builder(this@MainActivity)
+                            .setMessage(R.string.vsm_zone_unavailable)
+                            .setPositiveButton(android.R.string.ok, null)
+                            .show()
+                    }
+                } else {
+                    conn.disconnect()
+                    withContext(Dispatchers.Main) {
+                        binding.pbWaiting.hide()
+                        AlertDialog.Builder(this@MainActivity)
+                            .setMessage(R.string.vsm_zone_switch_error)
+                            .setPositiveButton(android.R.string.ok, null)
+                            .show()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(AppConfig.TAG, "VseMoiOnline: Zone switch failed", e)
+                withContext(Dispatchers.Main) {
+                    binding.pbWaiting.hide()
+                    AlertDialog.Builder(this@MainActivity)
+                        .setMessage(R.string.vsm_zone_switch_error)
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show()
+                }
+            }
+        }
     }
 
     private fun setupCodeFields() {
@@ -1349,7 +1549,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
             binding.tvSubValue.clearAnimation()
             setSubValueUrgentPulse(false)
         } else {
-            binding.tvSubValue.text = resources.getQuantityString(R.plurals.vsm_days_remaining, effectiveDays, effectiveDays)
+            binding.tvSubValue.text = formatDaysRu(effectiveDays)
             when {
                 effectiveDays <= 3 -> {
                     binding.tvSubValue.setTextColor(ContextCompat.getColor(this, R.color.vsm_sub_urgent))
@@ -1381,23 +1581,29 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         view.startAnimation(anim)
     }
 
-    /**
-     * Update the server row flag, name, and arrow colour.
-     * Phase 1: single Frankfurt server, hardcoded.
-     * TODO Phase 2: derive from /servers response and user selection.
-     */
     private fun updateServerRow() {
-        binding.tvServerFlag.text = "🇩🇪"
-        binding.tvServerName.text = "Франкфурт, Германия"
+        val prefs  = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val region = prefs.getString(PREF_SERVER_REGION, null)
+        val zone   = prefs.getString(PREF_SERVER_ZONE, null) ?: "Германия, Франкфурт"
+        binding.tvServerFlag.text = regionToFlag(region)
+        binding.tvServerName.text = zone
 
-        val plan = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(PREF_PLAN, "free")
-        // Arrow is active (tinted green) only for paid users who can actually change servers
+        val plan = prefs.getString(PREF_PLAN, "free")
         binding.tvServerArrow.imageTintList = ColorStateList.valueOf(
             ContextCompat.getColor(
                 this,
                 if (plan == "paid") R.color.vsm_sub_ok else R.color.vsm_border
             )
         )
+    }
+
+    private fun regionToFlag(region: String?): String = when {
+        region == null                                                  -> "🌐"
+        region.startsWith("EU-MD")                                     -> "🇲🇩"
+        region.startsWith("EU-FR") || region.startsWith("EU-DE")      -> "🇩🇪"
+        region.startsWith("EU-")                                       -> "🇪🇺"
+        region.startsWith("US-")                                       -> "🇺🇸"
+        else                                                            -> "🌐"
     }
 
     /**
@@ -1569,6 +1775,18 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     // ── Change 6: subscription button animations ─────────────────────────
 
     private var renewPulseAnimator: ValueAnimator? = null
+
+    private fun formatDaysRu(n: Int): String {
+        val mod10 = n % 10
+        val mod100 = n % 100
+        val word = when {
+            mod100 in 11..14 -> "дней"
+            mod10 == 1       -> "день"
+            mod10 in 2..4    -> "дня"
+            else             -> "дней"
+        }
+        return "$n $word"
+    }
 
     private fun updateSubButtons(plan: String, daysRemaining: Int, trafficFraction: Float) {
         val isNight = (resources.configuration.uiMode and

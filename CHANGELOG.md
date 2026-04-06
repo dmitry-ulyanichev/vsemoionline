@@ -147,6 +147,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Added `provisioning_failed_message` string resource (English + Russian)
   - Messages automatically display in user's device language
 
+### Changed (2026-04-05)
+- **Provisioning fallback chain now applies to all devices, not just fresh ones**
+  - Known devices (stored UUID) previously used a single URL with no fallback — a Cloudflare outage made reconnection impossible
+  - Full two-cycle chain (last working URL → primary → Gist → other platforms) now runs for all provision paths
+  - Core loop extracted into `runProvisionFallbackChain()` shared by all callers
+
+- **VPN button no longer starts VPN when provisioning fails**
+  - Previously the button turned green even on provision failure (UUID not registered → traffic silently dropped)
+  - `startV2Ray()` now only called on successful provision; failure shows a dismissible dialog
+  - Fresh-device VPN button tap now runs the full fallback chain (previously jumped straight to `startV2Ray()` → "Select a configuration" legacy toast)
+
+- **Provisioning failure UX: toast → AlertDialog, message improved**
+  - Error stays on screen until user dismisses (was a short-lived toast)
+  - Background provisioning failure (app open) now silent — dialog only shown on explicit VPN button tap
+  - Error message no longer blames the user's connection; now says service is temporarily unavailable and to contact support
+  - New `provisioning_failed_title` string added in English and Russian
+
 ## [1.2.0] - 2026-01-05
 
 ### Added

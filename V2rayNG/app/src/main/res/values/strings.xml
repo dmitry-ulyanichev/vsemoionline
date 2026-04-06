@@ -407,7 +407,8 @@
 
     <!-- VseMoiOnline: Provisioning messages -->
     <string name="provisioning_retry_message">Still trying to connect you, please wait...</string>
-    <string name="provisioning_failed_message">Unable to connect to provisioning service. Please check your internet connection.</string>
+    <string name="provisioning_failed_title">Could not connect</string>
+    <string name="provisioning_failed_message">The VPN service is temporarily unavailable. Please try again later. If the problem persists, contact support.</string>
 
     <!-- VseMoiOnline: Subscription row -->
     <string name="vsm_toolbar_title">Все Мои Онлайн</string>
@@ -453,6 +454,10 @@
     <string name="vsm_server_dialog_body">Выбор сервера доступен только для платных пользователей. Оплатите подписку, чтобы выбрать сервер.</string>
     <string name="vsm_server_dialog_cancel">Отмена</string>
     <string name="vsm_server_dialog_cta">Оплатить</string>
+    <string name="vsm_zone_picker_title">Выберите сервер</string>
+    <string name="vsm_zone_unavailable">Сервер недоступен. Попробуйте другую зону.</string>
+    <string name="vsm_zone_switch_error">Не удалось переключить сервер. Проверьте подключение.</string>
+    <string name="vsm_zone_connected">Подключено</string>
 
     <!-- VseMoiOnline: Days remaining (Russian plurals) -->
     <plurals name="vsm_days_remaining">
