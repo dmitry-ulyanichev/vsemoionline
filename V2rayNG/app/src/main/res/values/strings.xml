@@ -455,7 +455,7 @@
     <string name="vsm_server_dialog_cancel">Отмена</string>
     <string name="vsm_server_dialog_cta">Оплатить</string>
     <string name="vsm_zone_picker_title">Выберите сервер</string>
-    <string name="vsm_zone_unavailable">Сервер недоступен. Попробуйте другую зону.</string>
+    <string name="vsm_zone_unavailable">Сервер недоступен. Попробуйте другой.</string>
     <string name="vsm_zone_switch_error">Не удалось переключить сервер. Проверьте подключение.</string>
     <string name="vsm_zone_connected">Подключено</string>
 

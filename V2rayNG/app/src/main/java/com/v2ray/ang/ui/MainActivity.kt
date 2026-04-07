@@ -22,6 +22,9 @@ import android.graphics.Color
 import android.view.animation.AlphaAnimation
 import android.view.animation.Animation
 import android.widget.EditText
+import android.widget.BaseAdapter
+import android.widget.TextView
+import android.view.ViewGroup
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -55,6 +58,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.appcompat.widget.ListPopupWindow
 
 class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedListener {
     private val binding by lazy {
@@ -102,6 +106,46 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     }
 
     private data class ZoneItem(val zone: String, val region: String, val available: Boolean)
+
+    // items: List of String (non-selectable region header) or ZoneItem (selectable zone row)
+    private inner class ZonePickerAdapter(
+        private val items: List<Any>,
+        private val currentRegion: String?,
+        private val textColor: Int
+    ) : BaseAdapter() {
+        private val TYPE_HEADER = 0
+        private val TYPE_ZONE   = 1
+
+        override fun getCount()                  = items.size
+        override fun getItem(pos: Int)           = items[pos]
+        override fun getItemId(pos: Int)         = pos.toLong()
+        override fun getViewTypeCount()          = 2
+        override fun getItemViewType(pos: Int)   = if (items[pos] is String) TYPE_HEADER else TYPE_ZONE
+        override fun isEnabled(pos: Int)         = items[pos] !is String
+
+        override fun getView(pos: Int, convertView: View?, parent: ViewGroup): View {
+            val d = resources.displayMetrics.density
+            fun dp(v: Int) = (v * d).toInt()
+            val item = items[pos]
+            if (item is String) {
+                val tv = TextView(this@MainActivity)
+                tv.text = item.uppercase()
+                tv.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.vsm_hint_text))
+                tv.textSize = 11f
+                tv.typeface = android.graphics.Typeface.DEFAULT_BOLD
+                tv.setPadding(dp(16), dp(10), dp(16), dp(4))
+                return tv
+            }
+            val zone = item as ZoneItem
+            val mark = if (zone.region == currentRegion) "   ✓" else ""
+            val tv = TextView(this@MainActivity)
+            tv.text = "    ${regionToFlag(zone.region)}  ${zone.zone}$mark"
+            tv.setTextColor(textColor)
+            tv.textSize = 15f
+            tv.setPadding(dp(16), dp(12), dp(16), dp(12))
+            return tv
+        }
+    }
 
     internal val requestVpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (it.resultCode == RESULT_OK) {
@@ -1289,16 +1333,6 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     }
 
     private fun onServerRowTapped() {
-        val plan = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(PREF_PLAN, "free")
-        if (plan != "paid") {
-            AlertDialog.Builder(this)
-                .setTitle(R.string.vsm_server_dialog_title)
-                .setMessage(R.string.vsm_server_dialog_body)
-                .setNegativeButton(R.string.vsm_server_dialog_cancel) { _, _ -> }
-                .setPositiveButton(R.string.vsm_server_dialog_cta) { _, _ -> openCabinetUrl() }
-                .show()
-            return
-        }
         showZonePicker()
     }
 
@@ -1320,25 +1354,57 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
                 }
                 val currentRegion = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
                     .getString(PREF_SERVER_REGION, null)
-                val labels = zones.map { z ->
-                    val flag      = regionToFlag(z.region)
-                    val connected = if (z.region == currentRegion)
-                        " — ${getString(R.string.vsm_zone_connected)}" else ""
-                    "$flag ${z.zone}$connected"
-                }.toTypedArray()
-                val currentIdx = zones.indexOfFirst { it.region == currentRegion }.takeIf { it >= 0 } ?: 0
+                val plan = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                    .getString(PREF_PLAN, "free")
 
-                AlertDialog.Builder(this@MainActivity)
-                    .setTitle(R.string.vsm_zone_picker_title)
-                    .setSingleChoiceItems(labels, currentIdx) { dialog, which ->
-                        dialog.dismiss()
-                        val selected = zones[which]
-                        if (selected.region != currentRegion) {
-                            switchZone(selected.region, selected.zone)
-                        }
+                // Build grouped flat list: String = header, ZoneItem = zone row
+                val groupOrder = listOf("Европа", "Северная Америка", "Ближний Восток", "Азия", "Австралия", "Прочие")
+                val grouped = zones.groupBy { regionToGroup(it.region) }
+                val flatItems = mutableListOf<Any>()
+                for (group in groupOrder) {
+                    val groupZones = grouped[group] ?: continue
+                    flatItems.add(group)
+                    flatItems.addAll(groupZones)
+                }
+                val currentFlatIdx = flatItems.indexOfFirst {
+                    it is ZoneItem && it.region == currentRegion
+                }.coerceAtLeast(0)
+
+                // Resolve primary text color from theme
+                val tv = android.util.TypedValue()
+                theme.resolveAttribute(android.R.attr.textColorPrimary, tv, true)
+                val textColor = ContextCompat.getColor(this@MainActivity, tv.resourceId)
+
+                val popup = ListPopupWindow(this@MainActivity)
+                popup.setAdapter(ZonePickerAdapter(flatItems, currentRegion, textColor))
+                popup.anchorView = binding.rowServer
+                popup.isModal   = true
+                popup.height    = (resources.displayMetrics.heightPixels * 0.55).toInt()
+                popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(
+                    ContextCompat.getColor(this@MainActivity, R.color.vsm_surface2)))
+                popup.setOnItemClickListener { _, _, which, _ ->
+                    val item = flatItems[which]
+                    if (item !is ZoneItem) return@setOnItemClickListener
+                    popup.dismiss()
+                    if (item.region == currentRegion) return@setOnItemClickListener
+                    if (plan != "paid") {
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle(R.string.vsm_server_dialog_title)
+                            .setMessage(R.string.vsm_server_dialog_body)
+                            .setNegativeButton(R.string.vsm_server_dialog_cancel, null)
+                            .setPositiveButton(R.string.vsm_server_dialog_cta) { _, _ -> openCabinetUrl() }
+                            .show()
+                    } else {
+                        switchZone(item.region, item.zone)
                     }
-                    .setNegativeButton(R.string.vsm_server_dialog_cancel, null)
-                    .show()
+                }
+                popup.show()
+                // Scroll current zone to the vertical centre of the popup
+                popup.listView?.post {
+                    val lv = popup.listView ?: return@post
+                    val itemH = (48 * resources.displayMetrics.density).toInt()
+                    lv.setSelectionFromTop(currentFlatIdx, lv.height / 2 - itemH / 2)
+                }
             }
         }
     }
@@ -1409,7 +1475,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
                         mainViewModel.removeAllServer()
                         importBatchConfig(vlessUri)
                         updateServerRow()
-                        restartV2Ray()
+                        if (mainViewModel.isRunning.value == true) restartV2Ray()
                     }
                 } else if (code == 503) {
                     conn.disconnect()
@@ -1584,7 +1650,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     private fun updateServerRow() {
         val prefs  = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         val region = prefs.getString(PREF_SERVER_REGION, null)
-        val zone   = prefs.getString(PREF_SERVER_ZONE, null) ?: "Германия, Франкфурт"
+        val zone   = prefs.getString(PREF_SERVER_ZONE, null) ?: "—"
         binding.tvServerFlag.text = regionToFlag(region)
         binding.tvServerName.text = zone
 
@@ -1611,6 +1677,16 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         "CA-TR"                                     -> "🇨🇦"  // Canada (Toronto)
         "IL", "IL-HA", "IL-PT", "IL-RH", "IL-TA"  -> "🇮🇱"  // Israel
         else -> if (region?.startsWith("US-") == true) "🇺🇸" else "🌐"
+    }
+
+    private fun regionToGroup(region: String?): String = when {
+        region == null                                  -> "Прочие"
+        region.startsWith("EU")                        -> "Европа"
+        region.startsWith("US-") || region == "CA-TR" -> "Северная Америка"
+        region.startsWith("IL")                        -> "Ближний Восток"
+        region.startsWith("AS")                        -> "Азия"
+        region.startsWith("AU")                        -> "Австралия"
+        else                                            -> "Прочие"
     }
 
     /**
