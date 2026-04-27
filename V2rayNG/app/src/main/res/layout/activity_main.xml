@@ -8,6 +8,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:background="@color/vsm_toolbar"
         android:fitsSystemWindows="true"
         android:orientation="vertical">
 
@@ -65,6 +66,7 @@
                 android:id="@+id/tv_sub_link"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:visibility="gone"
                 android:text="@string/vsm_cabinet_link"
                 android:textSize="11sp"
                 android:textStyle="bold"
@@ -167,9 +169,12 @@
 
                 <!-- FrameLayout keeps halo behind FAB -->
                 <FrameLayout
+                    android:id="@+id/fab_touch_target"
                     android:layout_width="116dp"
                     android:layout_height="116dp"
-                    android:clipChildren="false">
+                    android:clipChildren="false"
+                    android:clickable="true"
+                    android:focusable="true">
 
                     <View
                         android:id="@+id/fab_halo"
@@ -185,8 +190,6 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_gravity="center"
-                        android:clickable="true"
-                        android:focusable="true"
                         android:contentDescription="@string/tasker_start_service"
                         android:src="@drawable/ic_power"
                         android:visibility="visible"
@@ -639,6 +642,92 @@
                     app:strokeColor="#46367D32"
                     app:backgroundTint="@android:color/transparent"
                     android:visibility="gone" />
+
+                <!-- Share card — regular members only, initially GONE -->
+                <LinearLayout
+                    android:id="@+id/layout_share_card"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="11dp"
+                    android:orientation="vertical"
+                    android:background="@drawable/vsm_share_card_bg"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:paddingTop="12dp"
+                    android:paddingBottom="12dp"
+                    android:visibility="gone">
+
+                    <!-- Label row: icon + text -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="10dp">
+
+                        <ImageView
+                            android:layout_width="15dp"
+                            android:layout_height="15dp"
+                            android:src="@drawable/ic_vsm_share"
+                            android:layout_marginEnd="7dp" />
+
+                        <TextView
+                            android:id="@+id/tv_share_label"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/vsm_share_label"
+                            android:textSize="13sp"
+                            android:textStyle="bold"
+                            android:textColor="?android:attr/textColorPrimary"
+                            android:letterSpacing="-0.01" />
+
+                    </LinearLayout>
+
+                    <!-- Share row: URL preview + copy button -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="40dp"
+                        android:orientation="horizontal"
+                        android:background="@drawable/vsm_share_row_bg"
+                        android:clipToOutline="true">
+
+                        <TextView
+                            android:id="@+id/tv_share_url"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:text="…/get"
+                            android:textSize="12sp"
+                            android:textColor="@color/vsm_sub_free"
+                            android:singleLine="true"
+                            android:ellipsize="end"
+                            android:gravity="center_vertical"
+                            android:paddingStart="11dp"
+                            android:paddingEnd="4dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_share_copy"
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            android:text="@string/vsm_share_copy"
+                            android:textSize="12sp"
+                            android:textStyle="bold"
+                            android:textColor="#FFFFFF"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:insetLeft="0dp"
+                            android:insetRight="0dp"
+                            app:backgroundTint="#56AB7B"
+                            app:cornerRadius="0dp"
+                            app:strokeWidth="0dp"
+                            android:paddingStart="13dp"
+                            android:paddingEnd="13dp"
+                            android:letterSpacing="0.01" />
+
+                    </LinearLayout>
+
+                </LinearLayout>
 
                 <!-- Продлить подписку — paid, days ≤ 3, initially GONE -->
                 <com.google.android.material.button.MaterialButton

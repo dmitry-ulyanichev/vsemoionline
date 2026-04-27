@@ -23,4 +23,13 @@
     <color name="vsm_hint_text">#546E7A</color>
     <color name="vsm_pill_stroke">#33A8D0F8</color>
     <color name="vsm_pill_fill">#1190CAF9</color>
+    <color name="vsm_restore_info_bg">#163A66</color>
+    <color name="vsm_restore_error_bg">#5A2320</color>
+    <color name="vsm_restore_success_bg">#183C25</color>
+    <color name="vsm_restore_input_bg">#FAFBFC</color>
+    <color name="vsm_restore_input_text">#1F2933</color>
+    <color name="vsm_restore_input_hint">#78909C</color>
+    <color name="vsm_restore_card_title">#E8EAF0</color>
+    <color name="vsm_restore_card_body">#C2CBD6</color>
+    <color name="vsm_restore_card_hint">#8FA0B4</color>
 </resources>

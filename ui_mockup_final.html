@@ -376,6 +376,92 @@ h1:first-of-type { margin-top: 0; }
   box-shadow: none;
 }
 
+/* ── Polished Share Card ── */
+/* ── Share card (regular member) ── */
+.share-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Soft radial wash behind the icon */
+.share-card::before {
+  content: '';
+  position: absolute;
+  top: -24px; right: -24px;
+  width: 80px; height: 80px;
+  background: radial-gradient(circle, rgba(86,171,123,0.10) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.share-label-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* Inline SVG share icon — no mask tricks */
+.share-label-row svg {
+  width: 15px; height: 15px;
+  stroke: #56AB7B;
+  flex-shrink: 0;
+}
+
+.share-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tp);
+  letter-spacing: -0.1px;
+  line-height: 1.25;
+}
+
+.share-row {
+  display: flex;
+  align-items: stretch;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.share-url {
+  flex: 1;
+  font-size: 12px;
+  color: var(--ts);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 9px 11px;
+  background: transparent;
+  border: none;
+}
+
+.share-copy {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 13px;
+  background: #56AB7B;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+  letter-spacing: 0.1px;
+}
+
+.share-copy:active { opacity: 0.75; }
+
+.D .share-row { background: rgba(0,0,0,0.18); }
+.D .share-card { box-shadow: 0 2px 10px rgba(0,0,0,0.18); }
+.D .share-copy { background: #56AB7B; }
+
 /* ── Activation code ── */
 .activation-section { display: flex; flex-direction: column; gap: 7px; }
 .code-label  { font-size: 12px; color: var(--ts); font-weight: 500; }
@@ -417,6 +503,106 @@ h1:first-of-type { margin-top: 0; }
 .d-btn { border: none; background: none; font-size: 14px; padding: 10px 14px; cursor: pointer; }
 .d-btn.cancel { color: #9E9E9E; }
 .d-btn.cta    { color: #1565C0; font-weight: 700; }
+
+/* ── Recovery mockups ── */
+.restore-screen {
+  min-height: 640px;
+  background: var(--surface2);
+  display: flex;
+  flex-direction: column;
+}
+.restore-hero {
+  background:
+    radial-gradient(ellipse 220px 220px at 85% 15%, rgba(125,196,160,0.16) 0%, transparent 100%),
+    var(--toolbar);
+  padding: 18px 18px 20px;
+  border-bottom: 1px solid rgba(125,196,160,0.22);
+}
+.restore-kicker {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+  color: #7DC4A0;
+}
+.restore-title {
+  margin-top: 8px;
+  font-size: 24px;
+  line-height: 1.15;
+  font-weight: 700;
+  color: #fff;
+}
+.restore-sub {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(232,234,240,0.90);
+}
+.restore-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.restore-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.restore-step {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--tp);
+}
+.restore-copy {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ts);
+}
+.restore-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tp);
+}
+.restore-input {
+  height: 46px;
+  border-radius: 14px;
+  border: 1.5px solid var(--border);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  font-size: 15px;
+  color: #9E9E9E;
+}
+.D .restore-input {
+  background: #FAFBFC;
+  color: #607D8B;
+}
+.restore-status {
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+.restore-status.info {
+  background: rgba(21, 101, 192, 0.10);
+  color: var(--link);
+}
+.restore-status.success {
+  background: rgba(46, 125, 50, 0.12);
+  color: var(--sub-ok);
+}
+.restore-foot {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--th);
+}
 
 /* ═══════════════════════════════════════
    SVG RING MATH REFERENCE (r=38)
@@ -1547,6 +1733,269 @@ h1:first-of-type { margin-top: 0; }
   </div>
 
 </div><!-- /row paid dark -->
+
+<!-- ════════════════════════════════════════════════
+     RECOVERY FLOW MOCKUPS
+════════════════════════════════════════════════ -->
+<h1>Восстановление подписки · Целевой UX</h1>
+<div class="row">
+
+  <div class="col">
+    <div class="lbl">⑮ Светлая тема · шаг 1 — ввод email</div>
+    <div class="phone L">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="restore-screen">
+        <div class="restore-hero">
+          <div class="restore-kicker">Восстановление доступа</div>
+          <div class="restore-title">Восстановить подписку</div>
+          <div class="restore-sub">Если вы сменили телефон или переустановили приложение, мы поможем быстро вернуть платный доступ на это устройство.</div>
+        </div>
+        <div class="restore-body">
+          <div class="restore-card">
+            <div class="restore-step">Шаг 1. Подтвердите email</div>
+            <div class="restore-copy">Введите почту, которую вы указывали при оплате. Мы отправим короткий код подтверждения.</div>
+            <div class="restore-label">Email</div>
+            <div class="restore-input">example@mail.ru</div>
+            <button class="btn pay">Получить код</button>
+            <div class="restore-foot">Нужно только ввести email и 4-значный код. Приложение само привяжет это устройство в фоне.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="lbl">⑯ Светлая тема · шаг 2 — код получен</div>
+    <div class="phone L">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="restore-screen">
+        <div class="restore-hero">
+          <div class="restore-kicker">Восстановление доступа</div>
+          <div class="restore-title">Восстановить подписку</div>
+          <div class="restore-sub">Код уже отправлен на вашу почту. После подтверждения подписка сразу появится в приложении.</div>
+        </div>
+        <div class="restore-body">
+          <div class="restore-status info">Код отправлен. Проверьте почту и введите 4 цифры ниже.</div>
+          <div class="restore-card">
+            <div class="restore-step">Шаг 2. Введите код</div>
+            <div class="restore-copy">После проверки кода это устройство автоматически привяжется к вашему платному аккаунту.</div>
+            <div class="restore-label">Код подтверждения</div>
+            <div class="restore-input">9 9 0 8</div>
+            <button class="btn family">Восстановить подписку</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="lbl">⑰ Тёмная тема · шаг 1 — ввод email</div>
+    <div class="phone D">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="restore-screen">
+        <div class="restore-hero">
+          <div class="restore-kicker">Восстановление доступа</div>
+          <div class="restore-title">Восстановить подписку</div>
+          <div class="restore-sub">Если платный тариф пропал после нового телефона или переустановки, введите почту и подтвердите кодом.</div>
+        </div>
+        <div class="restore-body">
+          <div class="restore-card">
+            <div class="restore-step">Шаг 1. Подтвердите email</div>
+            <div class="restore-copy">Мы отправим короткий код на почту, которая привязана к вашей подписке.</div>
+            <div class="restore-label">Email</div>
+            <div class="restore-input">example@mail.ru</div>
+            <button class="btn pay">Получить код</button>
+            <div class="restore-foot">Показывать технический идентификатор устройства пользователю не нужно.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="lbl">⑱ Тёмная тема · успешное восстановление</div>
+    <div class="phone D">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="restore-screen">
+        <div class="restore-hero">
+          <div class="restore-kicker">Восстановление доступа</div>
+          <div class="restore-title">Подписка восстановлена</div>
+          <div class="restore-sub">Платный аккаунт снова привязан к этому устройству. Обновляем конфигурацию и возвращаем вас на главный экран.</div>
+        </div>
+        <div class="restore-body">
+          <div class="restore-status success">Готово. Подписка снова активна на этом устройстве.</div>
+          <div class="restore-card">
+            <div class="restore-step">Что происходит дальше</div>
+            <div class="restore-copy">Приложение автоматически обновляет конфигурацию. Если VPN уже был включён, подключение будет мягко перезапущено с платными параметрами.</div>
+            <button class="btn family">Вернуться на главный экран</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /row recovery -->
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- Row: regular member (paid by someone else)                  -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="row" style="margin-top:48px;">
+
+  <!-- ⑲ Light · regular member · comfortable balance -->
+  <div class="col">
+    <div class="lbl">⑲ Светлая · рядовой пользователь · 15 дней · VPN вкл</div>
+    <div class="phone L">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="sub-row">
+        <span class="sub-lbl">Подписка:</span>
+        <span class="sub-val ok">15 дней</span>
+        <!-- no cabinet link for regular member -->
+      </div>
+      <div class="server-row">
+        <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
+        <span class="srv-name">Франкфурт, Германия</span>
+        <span class="srv-arrow on">▾</span>
+      </div>
+      <div class="vpn-area"><div class="vpn-center"><div class="fab stop">■</div><span class="vpn-status">Подключено</span></div></div>
+      <div class="sub-block">
+        <div class="sub-header">
+          <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
+          <span class="sub-chevron down"></span>
+        </div>
+        <div class="sub-body">
+          <div class="charts-row">
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#E8EAF6" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#56AB7B" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="47.8"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#56AB7B;">400</span>
+                  <span class="dc-sub">из 500 ГБ</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Осталось</span>
+            </div>
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#E8EAF6" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#7DC4A0" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="28.7"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#7DC4A0;">22</span>
+                  <span class="dc-sub">из 25 Mbps</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Скорость</span>
+            </div>
+          </div>
+          <!-- no family button, no activation code -->
+          <div class="share-card">
+            <div class="share-label-row">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+              </svg>
+              <span class="share-label">Рекомендуйте наш VPN друзьям</span>
+            </div>
+            <div class="share-row">
+              <span class="share-url">https://vsemoi.online/get</span>
+              <button class="share-copy">Копировать ссылку</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑳ Dark · regular member · comfortable balance -->
+  <div class="col">
+    <div class="lbl">⑳ Тёмная · рядовой пользователь · 15 дней · VPN вкл</div>
+    <div class="phone D">
+      <div class="toolbar">
+        <span class="t-burger">☰</span><span class="t-title">ВсеМоиОнлайн</span><span class="t-dots">⋮</span>
+      </div>
+      <div class="sub-row">
+        <span class="sub-lbl">Подписка:</span>
+        <span class="sub-val ok">15 дней</span>
+        <!-- no cabinet link for regular member -->
+      </div>
+      <div class="server-row">
+        <span class="srv-lbl">Сервер</span><span class="srv-flag">🇩🇪</span>
+        <span class="srv-name">Франкфурт, Германия</span>
+        <span class="srv-arrow on">▾</span>
+      </div>
+      <div class="vpn-area"><div class="vpn-center"><div class="fab stop">■</div><span class="vpn-status">Подключено</span></div></div>
+      <div class="sub-block">
+        <div class="sub-header">
+          <span class="sub-header-title">УПРАВЛЕНИЕ ПОДПИСКОЙ</span>
+          <span class="sub-chevron down"></span>
+        </div>
+        <div class="sub-body">
+          <div class="charts-row">
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#2E3558" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#56AB7B" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="47.8"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#81C784;">400</span>
+                  <span class="dc-sub">из 500 ГБ</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Осталось</span>
+            </div>
+            <div class="chart-item">
+              <div class="donut-wrap">
+                <svg viewBox="0 0 96 96">
+                  <circle fill="none" stroke="#2E3558" stroke-width="10" cx="48" cy="48" r="38"/>
+                  <circle fill="none" stroke="#7DC4A0" stroke-width="10" stroke-linecap="round"
+                    cx="48" cy="48" r="38" stroke-dasharray="238.8" stroke-dashoffset="28.7"/>
+                </svg>
+                <div class="donut-center">
+                  <span class="dc-val" style="color:#7DC4A0;">22</span>
+                  <span class="dc-sub">из 25 Mbps</span>
+                </div>
+              </div>
+              <span class="chart-lbl">Скорость</span>
+            </div>
+          </div>
+          <!-- no family button, no activation code -->
+          <div class="share-card">
+            <div class="share-label-row">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+              </svg>
+              <span class="share-label">Рекомендуйте наш VPN друзьям</span>
+            </div>
+            <div class="share-row">
+              <span class="share-url">https://vsemoi.online/get</span>
+              <button class="share-copy">Копировать ссылку</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /row member -->
 
 </body>
 </html>

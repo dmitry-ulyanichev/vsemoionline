@@ -5,9 +5,25 @@
 
     <group android:id="@+id/group_main">
         <item
+            android:id="@+id/owner_cabinet"
+            android:icon="@drawable/ic_lock_24dp"
+            android:title="@string/vsm_cabinet_link" />
+        <item
+            android:id="@+id/restore_subscription"
+            android:icon="@drawable/ic_restore_24dp"
+            android:title="@string/vsm_restore_title" />
+        <item
+            android:id="@+id/tg_channel"
+            android:icon="@drawable/ic_telegram_24dp"
+            android:title="@string/title_tg_channel" />
+        <item
             android:id="@+id/per_app_proxy_settings"
             android:icon="@drawable/ic_per_apps_24dp"
             android:title="@string/per_app_proxy_settings" />
+        <item
+            android:id="@+id/privacy_policy"
+            android:icon="@drawable/ic_privacy_24dp"
+            android:title="@string/title_privacy_policy" />
         <item
             android:id="@+id/source_code"
             android:icon="@drawable/ic_source_code_24dp"
@@ -16,14 +32,6 @@
             android:id="@+id/oss_licenses"
             android:icon="@drawable/license_24px"
             android:title="@string/title_oss_license" />
-        <item
-            android:id="@+id/tg_channel"
-            android:icon="@drawable/ic_telegram_24dp"
-            android:title="@string/title_tg_channel" />
-        <item
-            android:id="@+id/privacy_policy"
-            android:icon="@drawable/ic_privacy_24dp"
-            android:title="@string/title_privacy_policy" />
         <!-- place holder for version text at the bottom -->
         <item
             android:id="@+id/placeholder"

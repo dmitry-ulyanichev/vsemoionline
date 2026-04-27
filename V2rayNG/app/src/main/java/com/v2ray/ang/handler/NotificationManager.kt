@@ -236,6 +236,6 @@ object NotificationManager {
      * @return The service instance.
      */
     private fun getService(): Service? {
-        return V2RayServiceManager.serviceControl?.get()?.getService()
+        return V2RayServiceManager.getService()
     }
 }

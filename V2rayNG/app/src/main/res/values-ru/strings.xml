@@ -139,7 +139,7 @@
     <string name="msg_downloading_content">Загрузка данных</string>
     <string name="menu_item_export_proxy_app">Экспорт в буфер обмена</string>
     <string name="menu_item_import_proxy_app">Импорт из буфера обмена</string>
-    <string name="per_app_proxy_settings">Выбор приложений</string>
+    <string name="per_app_proxy_settings">Настройки приложений</string>
     <string name="per_app_proxy_settings_enable">Использовать выбор приложений</string>
 
     <!-- Preferences -->
@@ -232,8 +232,8 @@
     <string name="title_privacy_policy">Политика конфиденциальности</string>
     <string name="title_about">О приложении</string>
     <string name="title_source_code">Исходный код</string>
-    <string name="title_oss_license">Лицензии открытого исходного кода</string>
-    <string name="title_tg_channel">Telegram-канал</string>
+    <string name="title_oss_license">Лицензии открытого ПО</string>
+    <string name="title_tg_channel">Telegram канал</string>
     <string name="title_configuration_backup">Резервирование конфигурации</string>
     <string name="title_configuration_restore">Восстановление конфигурации</string>
     <string name="title_configuration_share">Поделиться конфигурацией</string>
@@ -410,6 +410,32 @@
     <string name="provisioning_retry_message">Всё ещё пытаемся подключиться, пожалуйста, подождите...</string>
     <string name="provisioning_failed_title">Нет подключения</string>
     <string name="provisioning_failed_message">Сервис ВПН временно недоступен. Попробуйте позже. Если проблема не исчезнет — обратитесь в поддержку.</string>
+    <string name="vsm_restore_title">Восстановить подписку</string>
+    <string name="vsm_restore_eyebrow">Восстановление доступа</string>
+    <string name="vsm_restore_intro">Введите email, который вы указывали при оплате. Мы отправим 4-значный код и восстановим подписку на этом устройстве.</string>
+    <string name="vsm_restore_intro_step2">Код уже отправлен на вашу почту. Введите 4 цифры ниже, и мы восстановим подписку на этом устройстве.</string>
+    <string name="vsm_restore_email_label">Email</string>
+    <string name="vsm_restore_email_hint">example@mail.ru</string>
+    <string name="vsm_restore_send_code">Получить код</string>
+    <string name="vsm_restore_step1">Шаг 1. Подтвердите email</string>
+    <string name="vsm_restore_step1_body">Мы отправим короткий код на почту, которая привязана к вашей платной подписке.</string>
+    <string name="vsm_restore_code_label">Код подтверждения</string>
+    <string name="vsm_restore_code_hint">1234</string>
+    <string name="vsm_restore_confirm">Восстановить подписку</string>
+    <string name="vsm_restore_step2">Шаг 2. Введите код</string>
+    <string name="vsm_restore_step2_body">После проверки кода это устройство автоматически привяжется к вашему платному аккаунту.</string>
+    <string name="vsm_restore_email_required">Укажите email</string>
+    <string name="vsm_restore_code_required">Введите 4-значный код</string>
+    <string name="vsm_restore_code_sent">Код отправлен. Проверьте почту и введите его ниже.</string>
+    <string name="vsm_restore_success">Подписка восстановлена</string>
+    <string name="vsm_restore_success_intro">Платный аккаунт снова привязан к этому устройству. Обновляем конфигурацию и возвращаем вас на главный экран.</string>
+    <string name="vsm_restore_success_step">Что происходит дальше</string>
+    <string name="vsm_restore_success_body">Приложение автоматически обновляет конфигурацию. Если VPN уже был включён, подключение будет мягко перезапущено с платными параметрами.</string>
+    <string name="vsm_restore_generic_error">Не удалось восстановить подписку. Попробуйте ещё раз.</string>
+    <string name="vsm_restore_footer">Нужно только ввести email и 4-значный код. Приложение само привяжет это устройство в фоне.</string>
+    <string name="vsm_restore_done">Вернуться на главный экран</string>
+    <string name="vsm_restore_resend_code">Отправить код ещё раз</string>
+    <string name="title_pref_back">Назад</string>
     <string name="vsm_zone_picker_title">Выберите сервер</string>
     <string name="vsm_zone_unavailable">Сервер недоступен. Попробуйте другую зону.</string>
     <string name="vsm_zone_switch_error">Не удалось переключить сервер. Проверьте подключение.</string>

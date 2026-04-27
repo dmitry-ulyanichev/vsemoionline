@@ -2,6 +2,507 @@
 
 ---
 
+## Updates (2026-04-27) — Android FAB responsiveness and VPN state hardening
+
+### Android: larger FAB tap target and immediate connecting state
+**Files**: `V2rayNG/app/src/main/res/layout/activity_main.xml`, `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`
+
+**Problem**:
+- The visible power control included a 116dp halo, but only the inner 88dp `FloatingActionButton` handled taps.
+- On connect, the top progress bar appeared immediately, but `Подключение…` appeared only after provisioning completed enough to call `startV2Ray()`.
+- Repeated connect taps could start overlapping provisioning/import attempts.
+
+**Fix**:
+- Added `fab_touch_target` around the halo/FAB and wired it to the same click listener as `fab`.
+- Added `isConnectAttemptInProgress`.
+- `beginConnectAttempt()` now shows the progress bar and `Подключение…` immediately.
+- Repeated connect taps are ignored until success, failure, or VPN permission cancellation.
+- `finishConnectAttempt()` centralizes cleanup for provisioning failure, concurrent-device block, missing selected config, and permission cancellation.
+
+### Android: connecting-label flicker removed
+**File**: `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`
+
+**Problem**:
+- During provisioning, `pollStatus()` refreshed the idle FAB appearance and briefly overwrote `Подключение…` with `Нажмите для подключения`.
+
+**Fix**:
+- `refreshFabIdleAppearance()` now no-ops when `isConnectAttemptInProgress` or `isAwaitingVpnStart` is true.
+- A stale `MSG_STATE_NOT_RUNNING` received during provisioning no longer resets the connecting label unless it corresponds to an awaited service-start result.
+
+### Android: VPN service start/stop state hardening
+**Files**: `V2rayNG/app/src/main/java/com/v2ray/ang/handler/V2RayServiceManager.kt`, `V2rayNG/app/src/main/java/com/v2ray/ang/service/V2RayVpnService.kt`, `V2rayNG/app/src/main/java/com/v2ray/ang/service/V2RayProxyOnlyService.kt`, `V2rayNG/app/src/main/java/com/v2ray/ang/handler/NotificationManager.kt`
+
+**Problem**:
+- If the core was already running while the UI believed it was disconnected, `startContextService()` silently returned, leaving the app in a long-running connecting state.
+- Disconnect depended on a service broadcast path and a `SoftReference<ServiceControl>`, which could be fragile after screen-off/wake or memory pressure.
+- Service startup paths could return false without notifying the UI.
+
+**Fix**:
+- `startContextService()` now sends `MSG_STATE_RUNNING` when the core is already running, resyncing the UI instead of silently returning.
+- VPN/proxy services now register through `setServiceControl()` and clear through `clearServiceControl()` on destroy.
+- `V2RayServiceManager` keeps a managed live service reference while the service exists, with the old soft reference retained only as a fallback.
+- `stopVService()` now calls the live service directly when possible; if the core is running without service control, it stops the core and notifies the UI.
+- `V2RayVpnService` and `V2RayProxyOnlyService` send `MSG_STATE_START_FAILURE` if `startCoreLoop()` returns false.
+- `NotificationManager` now obtains the service via `V2RayServiceManager.getService()`, so it uses the hardened service-control path.
+
+**Validation**:
+- `./gradlew :app:compilePlaystoreDebugKotlin` — passed.
+
+---
+
+## Updates (2026-04-24) — Emancipation, regular-member UX, disposable-domain download page
+
+### Backend: member emancipation flow
+**Files**: `client-backend/src/lib/families.js`, `client-backend/src/lib/payments/service.js`, `client-backend/src/routes/payment.js`, `client-backend/src/routes/cabinet.js`
+
+A regular family member who pays for themselves is automatically detached from the original family and given a new independent family.
+
+**`families.js`**:
+- Added `emancipateMemberInTx(client, accountId, memberRow)` — runs inside the caller's transaction
+  1. Computes bonus days from `memberRow.allocation_paid_until` (days still remaining)
+  2. Sets `family_members.status = 'detached'` and clears `allocation_paid_until`
+  3. Expires any pending `claim_account` tokens for the account
+  4. Zeros `accounts.paid_until` and sets `plan = 'free'` before calling `ensureCanonicalFamilyForAccount` — critical to prevent the stale expiry date from seeding the new family member's allocation
+  5. Inserts a `member_emancipated` event into `family_events` with `days_carried_over` in payload
+  6. Returns `bonusDays` to the caller
+
+**`payments/service.js`**:
+- `resolveAccount`: `device_fingerprint` is now the highest-priority lookup (via `devices JOIN accounts`) above `account_uuid`, `android_id`, and email — prevents a mistyped email from routing the payment to the wrong account
+- Added `checkAndEmancipateIfNeeded(client, accountId)` — queries `family_members JOIN families` for an active non-owner slot, calls `emancipateMemberInTx` if found, returns bonus days
+- `confirmPayment`: calls `checkAndEmancipateIfNeeded` before `creditAccountDepositDays`; adds `bonusDays` to the credited amount
+
+**`routes/payment.js`**:
+- `GET /payment`: resolves `deviceContext` by fingerprint; sets `isEmancipation = true` when `family_member_role === 'member'`
+- Render: pre-fills email from `deviceContext.email`; shows emancipation warning if `isEmancipation`; adds hidden `device_fingerprint` input
+- `POST /payment/create`: passes `device_fingerprint` through to `createPaymentIntent`
+- Selection summary: simplified to `"Валюта: {currency} • Режим: {billingMode}"` (removed payment method)
+
+**`routes/cabinet.js`**:
+- Added `case 'member_emancipated'` to `buildFamilyEventHistoryEntry` — renders "Пользователь вышел из семьи: {name}" with a negative days label in the original family's history
+
+### Android: activation code section — hidden for all paid users
+**File**: `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`
+
+`layoutActivationSection` visibility changed from `plan == "free" || (plan == "paid" && effectiveDays <= 3)` to `plan == "free"` only. Paid users renew via the payment page; grant_days tokens for paid accounts are an operator-only action through the cabinet.
+
+### Android: regular-member UX — share card
+**Files**: `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`, `V2rayNG/app/src/main/res/layout/activity_main.xml`, `V2rayNG/app/src/main/res/values/strings.xml`, `V2rayNG/app/src/main/res/drawable/vsm_share_card_bg.xml`, `V2rayNG/app/src/main/res/drawable/vsm_share_row_bg.xml`, `V2rayNG/app/src/main/res/drawable/ic_vsm_share.xml`
+
+**Backend change**: `/status` now returns `family_role: "owner" | "member" | null`. Android saves it as `PREF_FAMILY_ROLE` from each poll.
+
+**`updateSubButtons`**: added `isRegularMember = familyRole == "member"` branch:
+- Hides `btnPayContainer`, `btnFamily`, `btnRenew`
+- Shows `layoutShareCard`; sets `tvShareUrl.text` to `{PREF_BACKEND_BASE_URL}/get`
+- `owner_cabinet` drawer item hidden when `isRegularMember`
+
+**Share card layout** (`activity_main.xml`):
+- Outer card: `vsm_share_card_bg` (uses `@color/vsm_surface2` + `@color/vsm_border` — theme-aware, matching mockup `--surface2`/`--border`)
+- Label row: `ic_vsm_share` vector (3-node graph, `#56AB7B` stroke) + bold primary-text label
+- Share row: `vsm_share_row_bg` (uses `@color/vsm_surface` + border, 10dp corners), 40dp fixed height, `clipToOutline=true`; URL `TextView` (weight=1) + `MaterialButton` with `app:backgroundTint="#56AB7B"`, all four insets zeroed, `cornerRadius=0dp` so the row's outline clips the corners
+
+**`copyShareUrl()`**: reads `PREF_BACKEND_BASE_URL`, appends `/get`, copies to `ClipboardManager`, toasts `vsm_share_copied`.
+
+### Backend: `GET /get` — download landing page
+**File**: `client-backend/src/routes/download.js`
+
+Added `renderGetPage(apkInfos)` using `renderSitePage` + an `extraCss` block ported from `website/style.css` download section.
+
+Structure mirrors `website/index.html #download`:
+- `download-block`: `linear-gradient(135deg, var(--navy), var(--navy2))`, centered, 48 px padding
+- Three `.download-card` articles in a CSS Grid (3-col → 1-col below 680 px): dark glass background, green border on selected, hover lift, "Рекомендуем" badge on the main APK
+- `.dl-btn`: inline download button; turns green+navy when card is selected via JS
+- JS: card selection, aria-pressed sync, size refresh from `/api/public/downloads`
+- Download URLs are relative (`/download/android` etc.) — work on any domain
+
+Card descriptions are static editorial copy in `CARD_META` (keyed by `main`/`older`/`universal`) matching the website copy exactly.
+
+---
+
+## Updates (2026-04-18) — Android main-screen polish, recovery localization, and connect-flow cleanup
+
+### Android: system bars and drawer navigation aligned with VseMoiOnline UI
+**Files**: `V2rayNG/app/src/main/java/com/v2ray/ang/ui/BaseActivity.kt`, `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`, `V2rayNG/app/src/main/res/layout/activity_main.xml`, `V2rayNG/app/src/main/res/menu/menu_drawer.xml`, `V2rayNG/app/src/main/res/values/strings.xml`, `V2rayNG/app/src/main/res/values-ru/strings.xml`, `V2rayNG/app/src/main/res/values/themes.xml`, `V2rayNG/app/src/main/res/values-night/themes.xml`
+
+**Changes**:
+- Removed the old app-wide status/navigation bar overrides that caused low-contrast results in light theme on some devices
+- Main screen now applies its own system-bar treatment so the status bar remains readable in both themes, including Android 15+ transparent-status-bar behavior
+- Drawer items reordered to:
+  - `Личный кабинет`
+  - `Восстановить подписку`
+  - `Telegram канал`
+  - `Настройки приложений`
+  - `Политика конфиденциальности`
+  - `Исходный код`
+  - `Лицензии открытого ПО`
+- Base string resources updated so the active build path shows Russian drawer labels consistently
+
+### Android: restore-subscription flow localized for Russian users
+**Files**: `V2rayNG/app/src/main/java/com/v2ray/ang/ui/RestoreSubscriptionActivity.kt`, `V2rayNG/app/src/main/res/values/strings.xml`, `V2rayNG/app/src/main/res/values-ru/strings.xml`
+
+**Changes**:
+- Restore-subscription screen copy moved to Russian in the base string set used by the current build
+- Includes screen title, intro text, step labels, buttons, validation messages, success state, footer text, and back-navigation label
+
+### Android: legacy lower-screen toasts cleaned up without changing manual import UX
+**Files**: `V2rayNG/app/src/main/java/com/v2ray/ang/viewmodel/MainViewModel.kt`, `V2rayNG/app/src/main/java/com/v2ray/ang/handler/V2RayServiceManager.kt`, `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`
+
+**Changes**:
+- Removed legacy V2rayNG start/stop/start-success/start-failure toasts from the main VPN flow
+- Removed the provisioning retry toast that briefly appeared under the server row
+- Added a dedicated provisioning-only silent import path instead of altering the shared manual import helper
+- Manual import flows retain their original success/error feedback
+
+### Android: first-connect race after reinstall/app reload fixed
+**File**: `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`
+
+**Problem**:
+- After the initial silent provisioning import, the first connect tap could fail with `Select a configuration`
+- The second tap worked because the imported config had finished settling by then
+
+**Fix**:
+- Silent provisioning imports are now awaited before `startV2Ray()` is allowed to run
+- This ensures the imported server exists and is selected before the VPN service start is attempted
+
+### Android: progress bar synchronized with actual VPN start transition
+**File**: `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`
+
+**Changes**:
+- Added an `isAwaitingVpnStart` UI flag
+- `startV2Ray()` now switches the status label to `CONNECTING` and keeps the top progress bar visible while waiting for the service result
+- The progress bar is hidden only when the `isRunning` observer receives the service start outcome, eliminating the short visual gap before the FAB turns red
+
+## Updates (2026-04-17) — Cabinet UI fully implemented
+
+### Backend: owner cabinet — full server-rendered UI
+**File**: `client-backend/src/routes/cabinet.js`, `cabinet-mockup.html`
+
+All three cabinet render functions (`renderCabinetEntryPage`, `renderResultPage`, `renderCabinetHome`) replaced with a complete, styled implementation matching the dark navy website theme.
+
+**New helpers**:
+- `safeJson(obj)` — JSON-stringifies and escapes `</script>` sequences for safe inline embedding
+- `getAccountsWithDevices(accountIds)` — queries `devices` table; returns a `Set` of account IDs that have at least one bound device
+
+**UI features**:
+- Two-step OTP login: email input (step 1 hidden once code is sent), 4-digit code input (step 2), resend affordance
+- Dark card layout with deposit pill, allocation-policy toggle (`manual` / `auto_distribute_evenly`), distribute-evenly dialog with auto-policy checkbox
+- Per-member `+`/`−` day controls, amber unallocated-days pill, transaction history section (expandable)
+- Activation card for single-member view and per member in multi-member view: monospace token with ⧉ copy button, full activation URL with ⧉ copy button
+- Glass-morphism nav with real SVG logo from `/assets/logo.svg`; site name uses tight letter-spacing to match static website
+
+**New route**: `GET /cabinet/logout` — clears the `cabinet_session` cookie and redirects to `/cabinet`.
+
+**Event handling**: `data-action` attribute pattern used throughout to avoid `${}` / JS-in-template conflicts.
+
+### Backend: token auto-minting logic corrected
+**File**: `client-backend/src/routes/cabinet.js`
+
+Auto-minting in `buildFamilyContext` previously re-created tokens after a device was activated, because it only checked whether a token existed — not whether a device was bound. Fixed:
+
+- `getAccountsWithDevices` called alongside `listPendingActivationTokensByAccountIds` in parallel
+- The minting loop skips any account that already has a device in the `devices` table (regardless of owner/member role)
+- The `/activation` endpoint no longer rejects owner-role accounts — the device-existence check is the correct gate
+
+**Validated**: after activating a device with a token and reloading the cabinet, no new token is auto-minted.
+
+---
+
+## Updates (2026-04-16/17) — Family allocation model complete; concurrent device enforcement
+
+### Backend: family deposit-first accounting model — all operations implemented and tested
+**Files**: `client-backend/src/lib/families.js`, `client-backend/src/routes/cabinet.js`
+
+All planned family deposit operations are now implemented and validated in production.
+
+**New operations**:
+- `POST /cabinet/api/family/policy` — set `manual` or `auto_distribute_evenly`
+- `POST /cabinet/api/family/rebalance` — move N days between two members (member-to-member via deposit as accounting intermediary)
+- `POST /cabinet/api/family/distribute-evenly` — rebalance entire pool evenly across all active members
+- `POST /cabinet/api/family/members/:id/remove` — detach member, return days to deposit, expire tokens, downgrade devices
+- `POST /cabinet/api/family/members/:id/allocate` — now deposit-first with fallback to richest member when deposit is empty; owner restriction removed
+
+**Policy auto-trigger**: when `allocation_policy = auto_distribute_evenly`, any deposit credit (payment, admin grant) calls `distributeFamilyDaysEvenlyTx` in the same transaction.
+
+**Bug fixed**: `listActiveFamilyMembersForUpdate` used bare `FOR UPDATE` on a `LEFT JOIN`, which PostgreSQL rejects. Fixed to `FOR UPDATE OF fm`.
+
+**Validated**:
+- Policy read (`allocation_policy: "manual"` in GET response) ✓
+- Policy update (manual ↔ auto_distribute_evenly) ✓
+- Distribute evenly: 147 + 41 + 26 days → 107 each, deposit 0 ✓
+- Manual rebalance: 10 days from owner to member ✓
+- Auto-distribute on payment: 30-day credit with 2 members → immediate rebalance ✓
+- Manual policy on payment: 30-day credit stays in deposit ✓
+- `+` fallback: deposit=0, owner 127 days, member 148 days — allocating to member stole 1 from owner ✓
+- Remove member: 148 days returned to deposit ✓
+
+### Backend: email-less family member slots
+**File**: `client-backend/src/lib/families.js`, `client-backend/src/routes/cabinet.js`
+
+`POST /cabinet/api/family/members` now accepts requests without an email. Email-less path creates a new anonymous account (NULL email, which is valid per the partial unique index `WHERE email IS NOT NULL`). `display_name` is required when email is absent. The restore flow does not apply; the owner re-issues a token from the cabinet.
+
+**Validated**: member created with `{"display_name":"My Laptop"}` → `email: null`, `activation: null`, `entitlement.tier: "free"` ✓
+
+### Backend: single active device enforcement
+**Files**: `client-backend/src/routes/provision.js`
+
+`findActiveSiblingDevice` (already present) checks `last_seen_at > NOW() - PAID_SESSION_LOOKBACK_MIN minutes` for other devices on the same account. `/status` already updates `last_seen_at` on every poll — so the lock stays alive as long as the first device is active.
+
+**New**: `POST /provision/release` — sets `last_seen_at = NOW() - interval '1 hour'` for the given `device_fingerprint`, allowing the other device to provision immediately. (First attempt set to NULL which violated a NOT NULL constraint — fixed to use a past timestamp.)
+
+**Validated**: two devices provisioned on same paid account; second device got 409; first device disconnected via release endpoint; second device provisioned immediately ✓
+
+### Android: concurrent device block — correct UX
+**File**: `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`
+
+**Changes**:
+- Added `PaidSessionActiveException`
+- `fetchAndImportConfig()`: 409 → throw `PaidSessionActiveException` instead of returning false
+- Both provisioning cycles: re-throw `PaidSessionActiveException` (previously caught and swallowed, which caused the generic dialog to appear)
+- `provisionThenConnect()` (both fresh-device and returning-device paths): specific catch for `PaidSessionActiveException` → show toast "VPN уже активно на другом устройстве", hide progress bar, return without showing dialog
+- Added `releaseProvisionSession()`: fire-and-forget `POST /provision/release` call with the stored `device_id` fingerprint; called when user taps the FAB to disconnect
+
+**Validated**: toast shown correctly on second device; misleading dialog no longer appears; after disconnect on first device, second device provisions immediately ✓
+
+---
+
+## Updates (2026-04-15) — Family-member claim flow validated; next target clarified
+
+### Backend: member activation and runtime family flows validated end to end
+**Files**: `client-backend/src/routes/cabinet.js`, `client-backend/src/routes/activate.js`, `client-backend/src/routes/provision.js`, `client-backend/src/routes/status.js`, `client-backend/src/routes/servers.js`, `client-backend/src/routes/restore.js`, `client-backend/src/lib/families.js`, `client-backend/migrations/20260414143000-token-purpose.js`
+
+This session closed the practical gap between "member has paid allocation in cabinet" and "member device actually becomes paid in the app".
+
+**Changes**:
+- cabinet family responses now expose member activation tokens for non-owner family members
+- backend added `POST /activate/claim` to bind a concrete `device_fingerprint` onto the target family member account
+- activation token semantics are now explicit in DB/backend via `tokens.purpose`:
+  - `grant_days`
+  - `claim_account`
+- `/activate` is now the legacy/manual grant-days path; `/activate/claim` is the device-claim path
+- device membership self-healing was added to runtime family reads so `family_member_devices` stays aligned during normal traffic
+- cabinet activation links now prefer `CABINET_BASE_URL` so they point at the real backend host (`vmonl.store`) even when the cabinet page is opened from `vsemoi.online`
+
+**Validation**:
+- owner cabinet still showed correct family state after deploy
+- member activation token appeared in cabinet
+- Android activation switched the app to paid immediately after entering the token
+- `/provision`, `/status`, `/servers`, and `/restore` all worked for the claimed member device
+
+### Android: activation deep link now claims the current device
+**File**: `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`
+
+The Android app no longer uses the old token-only activation semantics.
+
+**Changes**:
+- `handleActivateDeepLink()` now calls `POST /activate/claim`
+- sends JSON with:
+  - `token`
+  - `device_fingerprint`
+- after successful claim, the app immediately re-provisions and refreshes into the paid state
+
+**Validation**:
+- before this change, activation showed a success toast but left the device on the free account
+- after this change, activation immediately switched the emulator app to paid without requiring an extra Connect action
+
+### Product direction clarified this session
+
+The next canonical model step is **deposit-first family accounting**.
+
+Target behavior:
+- purchases/renewals add days to `family_deposit`
+- if the family has exactly one active member, days may auto-allocate to that sole member for low-friction UX
+- if the family has multiple active members, unassigned days stay in `family_deposit` unless an explicit distribution preference says otherwise
+- later UX may add:
+  - distribute evenly
+  - pause/delete member
+  - manual increase/decrease/rebalance
+
+Important note:
+- this is the intended final model
+- current production behavior is still transitional: renewals/top-ups do **not** yet land in `family_deposit` first
+
+---
+
+## Updates (2026-04-14) — Owner cabinet auth implemented; family semantics locked
+
+### Backend: owner cabinet entry moved to email + one-time code
+**Files**: `client-backend/src/routes/cabinet.js`, `client-backend/src/lib/email.js`, `client-backend/src/routes/provision.js`, `client-backend/src/routes/status.js`, `client-backend/src/app.js`, `client-backend/migrations/20260413150000-cabinet-auth.js`, `website/vsemoi.online.nginx.conf`
+
+Implemented the first owner-authenticated cabinet flow.
+
+**Changes**:
+- added `/cabinet` login page with email + 4-digit one-time code flow
+- added `cabinet_access_codes` and `cabinet_sessions` tables
+- generalized the email helper so recovery and cabinet access can both emit OTC codes
+- changed backend `cabinet_url` from `/payment` to `/cabinet`
+- proxied `/cabinet` on `vsemoi.online`
+
+**Validation**:
+- backend flow was deployed and tested manually
+- login succeeded for a paid account and showed subscription summary plus renew button
+
+### Android: cabinet removed from main row, moved to drawer
+**Files**: `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`, `V2rayNG/app/src/main/res/layout/activity_main.xml`, `V2rayNG/app/src/main/res/menu/menu_drawer.xml`
+
+The app no longer exposes cabinet access directly from the subscription row.
+
+**Changes**:
+- hid the old `tvSubLink` pill from the top subscription strip
+- added drawer item `Личный кабинет`
+- drawer entry opens backend `/cabinet` in the browser
+- pay / renew actions now open `/payment`, not `/cabinet`
+- if cached `cabinet_url` is absent, drawer fallback is `backend_base_url + /cabinet`
+
+**Validation**:
+- app rebuilt successfully
+- smoke test passed after the refactor
+
+### Product/backend logic clarified this session
+
+These decisions supersede the earlier exploratory “linked standalone relatives” direction:
+
+- every top-level account is conceptually a **family**
+- the creator is also the **first family member**
+- single-user mode is just a **family of one**
+- when a family has only one member, top-ups auto-allocate to that member so the user does not see redistribution UX
+- paid users do **not** downgrade to free when days or paid traffic hit zero
+- instead, they remain paid but enter an **exhausted** state pending renewal
+- full family management belongs to the **owner cabinet**, authenticated by email + OTC
+- client users should not get full owner access merely from device identity
+- emancipation should detach the current member (identified from device context) into a new family of one after independent payment + confirmed email
+
+### Important caution for next work
+
+The exploratory backend `/users` work added earlier in the session is **not** the canonical family model.
+
+Do not build further product UX on:
+- separate linked payer/member accounts
+- reallocating time by moving `paid_until` backwards on the payer account
+- downgrading a spent paid user to free
+
+The next implementation slice should replace that model with:
+- family account
+- family members
+- shared deposit / allocation
+- explicit paid-exhausted semantics
+
+---
+
+## Updates (2026-04-13) — Phase 3 payment UX consolidation + handoff to family account management
+
+### Backend / website: plan catalog made canonical for public pricing
+**Files**: `client-backend/src/lib/subscriptions.js`, `client-backend/src/routes/payment.js`, `website/pay.html`, `website/index.html`, `website/terms.html`, `website/vsemoi.online.nginx.conf`
+
+Phase 3 payment work now uses the backend plan catalog as the source of truth for both billing and public website pricing.
+
+**Changes**:
+- extended `PLAN_CATALOG` entries with website-facing metadata (`old_amount`, `old_price_label`, `price_label`, `badge`, `save_text`, `featured`)
+- added public endpoint `GET /api/public/plans`
+- updated static pages (`pay.html`, `index.html`, `terms.html`) to fetch plan data from that endpoint instead of hardcoding prices locally
+- nginx for `vsemoi.online` now proxies `/api/public/` to client-backend
+
+**Why**:
+- plan values had started drifting between payment page, landing page, and legal pages
+- future price/duration edits should happen once in `subscriptions.js`
+
+### Backend-hosted payment pages: theme-aware branded shell
+**Files**: `client-backend/src/routes/payment.js`, `website/vsemoi.online.nginx.conf`
+
+The backend-rendered payment flow now has a reusable theme-aware shell instead of one-off inline light-only templates.
+
+**Changes**:
+- added request theme resolution: explicit `theme=dark|light` wins; `vmonl.store` defaults to dark; other hosts default to light
+- preserved theme across create/success/cancel/error states
+- replaced disposable-host labeling with stable product branding
+- changed page title copy from `Продление подписки` to neutral `Оплата подписки`
+- refined the logo tile and mobile spacing from screenshot feedback
+
+### Android: explicit payment theme hint
+**File**: `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`
+
+`openCabinetUrl()` now appends `theme=dark` or `theme=light` to the saved `cabinet_url`.
+
+**Implementation details**:
+- preserves all existing query parameters
+- removes a pre-existing `theme` parameter before appending the new one
+- keeps the generic browser helper untouched; theme handling stays local to the payment/cabinet launch path
+
+### Backend: reusable branding asset path
+**Files**: `client-backend/src/assets/logo.svg`, `client-backend/src/lib/branding.js`, `client-backend/src/routes/assets.js`, `client-backend/src/app.js`, `client-backend/src/routes/payment.js`, `website/vsemoi.online.nginx.conf`
+
+To avoid duplicating logo SVG markup in each server-rendered page, branding is now reusable from the backend itself.
+
+**Changes**:
+- copied the real `website/logo.svg` into backend assets as `client-backend/src/assets/logo.svg`
+- added shared branding constants in `client-backend/src/lib/branding.js`
+- added `GET /assets/logo.svg`
+- nginx for `vsemoi.online` now proxies `/assets/` to client-backend
+- payment pages now use `<img src="/assets/logo.svg">`
+
+**Why**:
+- future backend-hosted pages, including planned family-account/payment flows, can reuse the same asset path without re-embedding the SVG
+
+### Public website: mobile table readability polish
+**Files**: `website/index.html`, `website/style.css`
+
+The mobile pricing table was tightened so labels stop wrapping awkwardly.
+
+**Changes**:
+- mobile-only short headers: `Цена`, `По акции`
+- mobile-only period labels: `1 мес.`, `3 мес.`, `6 мес.`, `12 мес.`
+- tighter cell padding and slightly smaller table text on narrow screens
+
+### Next recommended implementation step
+
+Phase 3 payment UI consolidation is now in a good temporary state without waiting for `platega.io`.
+
+**Recommended next build slice**:
+- start **family account management**
+- first implement backend data model and API surface for linked users / sub-accounts
+- then build cabinet pages on top of that model
+
+---
+
+## Updates (2026-04-12) — Phase 3 Recovery flow + screenshot-driven Android polish
+
+### Android: native recovery flow implemented
+**Files**: `V2rayNG/app/src/main/java/com/v2ray/ang/ui/RestoreSubscriptionActivity.kt`, `MainActivity.kt`, `AndroidManifest.xml`, `res/menu/menu_drawer.xml`, `res/layout/activity_restore_subscription.xml`, `res/values/strings.xml`, `res/values-ru/strings.xml`, `res/values/colors.xml`, `res/values-night/colors.xml`, `res/drawable/restore_*.xml`, `res/drawable/ic_arrow_back_24dp.xml`
+
+Added a dedicated Android recovery screen for paid users who change phones or reinstall the app.
+
+**Flow**:
+- User opens recovery from the app menu
+- Enters the email used during payment
+- App calls backend `POST /restore/send-code`
+- User enters 4-digit OTP
+- App calls backend `POST /restore/verify` with `email`, `code`, and the locally stored/generated `device_fingerprint`
+- On success, the activity returns `RESULT_OK` so `MainActivity` can re-provision and refresh paid state
+
+**Why**:
+- Browser recovery with manual device fingerprint entry was validated as a support fallback only
+- Native recovery is the intended user-facing flow because the app can attach the device ID automatically
+
+### Android: recovery UI brought in line with the approved VseMoiOnline mockup
+**Files**: `RestoreSubscriptionActivity.kt`, `activity_restore_subscription.xml`, `ui_mockup_final.html`, `values/strings.xml`, `values-ru/strings.xml`, `values/colors.xml`, `values-night/colors.xml`, `drawable/restore_hero_bg.xml`
+
+Two follow-up sessions on 2026-04-12 focused on screenshot-driven polish in both themes.
+
+**Changes**:
+- Recovery hero converted into a full-width branded section instead of an inset card
+- Recovery screen now uses the same app-level header/title as the main screen
+- Root layout now respects the top system inset so the toolbar sits below device status icons like `MainActivity`
+- Removed the fake hamburger interaction; toolbar navigation is now an honest back affordance
+- Step 1 and Step 2 are now separate states: after code send, Step 1 is replaced by the Step 2 card instead of both showing at once
+- Added resend-code affordance (`Send code again` / `Отправить код ещё раз`) for delivery retries
+- Added explicit recovery text colours (`vsm_restore_card_title`, `vsm_restore_card_body`, `vsm_restore_card_hint`) so Step 2 remains readable in dark theme
+- Success state reuses the Step 1 card container with success copy and retains the dedicated success status banner
+
+**Validation**:
+- Recovery happy path was tested end to end in previous session
+- XML resources validated locally with `xmllint`
+- Full Gradle compile still pending in a normal network-enabled environment
+
+---
+
 ## Updates (2026-04-04) — §2.5 Orchestrator: Server Scaling (code complete)
 
 ### New files

@@ -118,6 +118,10 @@
         <activity
             android:name=".ui.UserAssetUrlActivity"
             android:exported="false" />
+        <activity
+            android:name=".ui.RestoreSubscriptionActivity"
+            android:exported="false"
+            android:theme="@style/AppThemeDayNight.NoActionBar" />
 
         <activity
             android:name=".ui.SubEditActivity"

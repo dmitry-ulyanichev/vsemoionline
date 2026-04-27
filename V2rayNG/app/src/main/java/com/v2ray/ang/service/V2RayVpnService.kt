@@ -22,9 +22,9 @@ import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.NotificationManager
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.handler.V2RayServiceManager
+import com.v2ray.ang.util.MessageUtil
 import com.v2ray.ang.util.MyContextWrapper
 import com.v2ray.ang.util.Utils
-import java.lang.ref.SoftReference
 
 class V2RayVpnService : VpnService(), ServiceControl {
     private lateinit var mInterface: ParcelFileDescriptor
@@ -72,7 +72,7 @@ class V2RayVpnService : VpnService(), ServiceControl {
         super.onCreate()
         val policy = StrictMode.ThreadPolicy.Builder().permitAll().build()
         StrictMode.setThreadPolicy(policy)
-        V2RayServiceManager.serviceControl = SoftReference(this)
+        V2RayServiceManager.setServiceControl(this)
     }
 
     override fun onRevoke() {
@@ -86,12 +86,15 @@ class V2RayVpnService : VpnService(), ServiceControl {
 
     override fun onDestroy() {
         super.onDestroy()
+        V2RayServiceManager.clearServiceControl(this)
         NotificationManager.cancelNotification()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (V2RayServiceManager.startCoreLoop()) {
             startService()
+        } else {
+            MessageUtil.sendMsg2UI(this, AppConfig.MSG_STATE_START_FAILURE, "")
         }
         return START_STICKY
         //return super.onStartCommand(intent, flags, startId)
@@ -344,4 +347,3 @@ class V2RayVpnService : VpnService(), ServiceControl {
         }
     }
 }
-

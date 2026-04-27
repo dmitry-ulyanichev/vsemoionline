@@ -1,14 +1,241 @@
 # VseMoiOnline: Implementation Plan
 
+## Updates (2026-04-24)
+
+### Backend housekeeping + canonical family bootstrap
+
+Completed in this session:
+
+- Added a shared backend housekeeping module so transient-row cleanup is centralized instead of duplicated per route.
+- Cabinet traffic now prunes stale `cabinet_access_codes`, `cabinet_sessions`, `post_payment_cabinet_sessions`, and activation `tokens`.
+- Restore traffic now prunes stale `recovery_codes`.
+- Payment traffic now prunes stale `payment_attempts` and non-successful `payments` (`pending`, `processing`, `cancelled`, `failed`).
+
+Retention rules now encoded in the backend:
+
+- `cabinet_access_codes`: keep 1 day after expiry
+- `cabinet_sessions`: keep 7 days after expiry
+- `post_payment_cabinet_sessions`: keep 7 days after expiry
+- `recovery_codes`: keep 1 day after expiry
+- activation `tokens`: keep 7 days after they become unusable (`used_at` for used tokens, `expires_at` for unused expired tokens)
+- `payment_attempts`: keep 30 days after `updated_at`
+- non-successful `payments`: keep 30 days after `created_at`
+
+Intentional no-prune decisions:
+
+- `payment_events`: keep forever as incoming webhook/event audit history
+- `payment_config_audit`: keep forever as admin payment-config change history
+- `payment_provider_health`: keep as live runtime state; it updates in place and should stay small
+
+Canonical family bootstrap hardening:
+
+- Added `ensureCanonicalFamilyForAccount(...)` and wired it into payment account resolution and post-payment email correction.
+- This closes the gap where payment-created or post-payment-corrected accounts could exist without the canonical `families` / `family_members` rows, which in turn could leave `family_member_devices` unmapped.
+
+Validation notes:
+
+- Recovery-code housekeeping was verified against live stale rows after deploy.
+- Cabinet/session/token/payment housekeeping should be verified the same way after deploy by comparing row counts before and after route traffic.
+
+---
+
+
+### Post-payment email confirmation — fixes and hardening
+
+Bug fixes:
+
+- `confirmPayment` was sending the confirmation email to `accounts.email` instead of `payment.customer_email`. Fixed: `SELECT` in `confirmPayment` now includes `customer_email`; the email payload uses `payment.customer_email` first and falls back to `accounts.email`.
+- `isValidEmail` client-side regex was embedded inside a JS template literal without escaped backslashes — `\s` was silently stripped to `s`, causing valid emails containing the letter `s` to be rejected. Fixed by doubling the backslashes.
+- `add-email` input in the add-member form was `type="email"`, letting the browser's native validator reject valid addresses before JS could run. Changed to `type="text"` with `inputmode="email"`.
+- New family members always showed "Устройство привязано" instead of an activation token. Root cause: `buildFamilyContext` only fetched existing tokens and never created them for new members. Fixed: `buildFamilyContext` now fetches which accounts have devices, then auto-creates activation tokens for members with no device and no existing token.
+
+Behaviour changes:
+
+- Email review step is now skipped for accounts that already have bound devices — if the email is linked to a device it has already been confirmed as working, so the review step is unnecessary friction.
+- When the user corrects their post-payment email to one that already belongs to a different account, the system now merges atomically instead of returning 409: credited days are re-applied to the existing account via `creditAccountDepositDays`, the payment record and the post-payment session are reassigned, and the temporary account is deleted. Safe to do unconditionally because the review step only appears for no-device accounts.
+- Post-payment session TTL extended from 30 minutes to 7 days to match the normal cabinet session lifetime. The session grants no more privilege than a regular OTP-authenticated session; the shorter TTL had no security justification.
+
+UI:
+
+- Payment success page status indicator replaced with an animated pill + pulsing blue dot, matching the design mockup. Pending state shows the pulse; cancelled/failed states show plain text.
+
+Validated in this session:
+
+- Confirmation email delivered to `customer_email` on webhook-triggered `confirmPayment`
+- Accounts with bound devices bypass email review and go straight to the cabinet
+- Email correction to an existing account: merge completes, days credited, confirmation email sent to corrected address, temp account deleted
+- New member activation token shown immediately on cabinet load (no manual reissue required)
+- `isValidEmail` accepts emails containing `s` (e.g. `3john.watts2@gmail.com`) after deploy
+
+---
+
+## Updates (2026-04-22)
+
+### Transactional email + payment-success flow
+
+Completed in this session:
+
+- Brevo SMTP is now configured for production transactional mail. Authenticated sending domain: `notify.vsemoi.online`; sender: `code@notify.vsemoi.online`.
+- Cabinet login OTP and subscription recovery OTP now send through Brevo instead of the old log-only stub.
+- `/cabinet/send-code` and `/restore/send-code` were hardened:
+  - generic success response for unknown emails (no account enumeration)
+  - per-email limits in the backend
+  - per-IP limits in the backend
+  - nginx edge rate limiting on both `vmonl.store` and `vsemoi.online`
+  - Cloudflare real-IP restoration added so edge limits apply per visitor, not per Cloudflare proxy
+  - nginx now returns `429` when the edge limit is exceeded
+- Payment success UX was redesigned and implemented:
+  - `/payment/success` now polls for confirmation and supports both internal `payment_intent_id` and provider payment ids in the success URL
+  - when payment becomes confirmed, the browser gets a short-lived post-payment cabinet session
+  - the user is taken into a restricted email-review gate before the rest of the cabinet opens
+  - the gate supports both `Email верный` and `Исправить email` paths
+  - the old `Вернуться к выбору тарифа` link was removed from the success page to reduce the risk of losing the only easy chance to fix a mistyped email
+- Payment confirmation email is now sent immediately after backend payment confirmation, and is sent again if the user changes the email in the post-payment review gate.
+
+Validation completed in this session:
+
+- Brevo DNS auth completed and verified
+- live cabinet OTP delivery verified
+- live recovery OTP delivery verified
+- send-code throttling verified at nginx edge (`429`)
+- post-payment success -> email review -> cabinet flow verified with test payments
+- post-payment email correction path verified
+
+Remaining note:
+
+- A full end-to-end confirmed-payment credits paid days into canonical family deposit test was not completed in this session because the ad-hoc test accounts used here were not attached to the canonical family tables.
+
+## Updates (2026-04-15)
+
+### Family-member runtime validation completed
+
+The canonical family/member model is now validated through the main member-device runtime paths.
+
+Validated end to end:
+
+- cabinet family state and member allocation
+- member activation/claim from the Android app
+- `/provision`
+- `/status`
+- `/servers`
+- `/restore`
+
+Important implementation note:
+
+- Android activation no longer relies on legacy token-only semantics
+- the app now claims the current device explicitly through backend `POST /activate/claim`
+- backend activation token semantics are now explicit:
+  - `grant_days`
+  - `claim_account`
+
+### Deposit-first accounting ✅ COMPLETE (2026-04-17)
+
+The deposit-first model is fully implemented. Behavior:
+
+- purchases/renewals add paid days to `family_deposit`
+- if the family has exactly one active member, those newly added days auto-allocate to that member
+- if the family has multiple active members, days remain in `family_deposit` and distribution follows `allocation_policy` (`manual` or `auto_distribute_evenly`)
+- operator/owner UX supported: distribute evenly, rebalance, manual `+`/`-` allocation, member removal (returns days to deposit)
+
+### Cabinet UI redesign ✅ COMPLETE (2026-04-17)
+
+The owner cabinet UI has been fully implemented as server-rendered HTML in `cabinet.js`. All major views are live:
+
+- Two-step OTP login (email → 4-digit code), with resend affordance
+- Single-member and multi-member home views with dark navy / glass-morphism theme matching `website/style.css`
+- Deposit pill, allocation-policy toggle, distribute-evenly dialog, per-member `+`/`−` allocation controls, transaction history (expandable)
+- Activation card per member: monospace token, copy-token button, full activation URL, copy-URL button
+- `GET /cabinet/logout` route
+
+Token auto-minting logic corrected: a token is minted only when a member has allocated days AND has no bound device. Device existence in the `devices` table is the authoritative signal — role (owner vs member) is not considered.
+
+The next major work item is the **cabinet UI redesign** — see `HANDOFF_2026-04-16_cabinet_ui.md` (now complete).
+
 ## Preliminary Decisions Needed Before Starting
 
 1. **tc agent interface** — ✅ HTTP server on `127.0.0.1:9000`, shared-secret auth. Port-based (not per-UUID): `POST /throttle` with `{ port, rate_kbps }`, `DELETE /throttle/:port`. One tc command changes the rate for all free users simultaneously, matching the design doc spec.
 2. **Domain fallback** — ✅ GitHub Gist, already implemented and working in `MainActivity.kt`.
 3. **DNS provider** — ✅ Namecheap registration + Cloudflare nameservers. Cloudflare API manages DNS records (A record updates via `PATCH /zones/{zone_id}/dns_records/{record_id}`) regardless of registrar.
 4. **Kamatera API credentials** — confirm access and test manual VPS provisioning before Phase 2.
-5. **YooKassa sandbox credentials** — confirm before Phase 3.
-6. **Payment amounts and plan durations** — needed before Phase 3.
-7. **Multi-user days redistribution policy** — pro-rata on payment, or operator-defined split?
+5. **`platega.io` merchant credentials + API/webhook docs** — confirm before Phase 3 payment adapter implementation.
+6. **Payment amounts and plan durations** — ✅ decided: 1 / 3 / 6 / 12 months at 100 / 300 / 550 / 1000 RUB.
+7. **Multi-user days redistribution policy** — ✅ explicit owner-controlled allocation from a shared family deposit; when a family has only one member, top-ups auto-allocate to that member so no redistribution UI is shown.
+
+## Payment Architecture Principles
+
+Phase 3 payment work must be designed for multiple providers and methods from the start. The system should support:
+
+- Russian-local payment providers such as `platega.io`
+- International options such as `lava.top`
+- Multiple payment methods under one provider (for example: SBP, RU cards, international cards, PayPal)
+- Future crypto payments without redesigning the main purchase flow
+
+Design rules:
+
+1. Treat **provider** and **payment method** as separate concepts.
+   - `provider`: `platega`, `lava`, `crypto`, etc.
+   - `method`: `sbp`, `bank_card_ru`, `bank_card_intl`, `paypal`, `crypto_btc`, `crypto_usdt_trc20`, etc.
+
+2. Create an internal **payment intent** first.
+   - Frontend never talks directly in provider terms.
+   - Backend creates and stores an internal payment record before calling any gateway.
+
+3. Normalize all provider flows into one internal lifecycle.
+   - create payment intent
+   - redirect / show QR / show crypto invoice
+   - receive webhook or poll provider
+   - confirm once
+   - apply subscription purchase once
+
+4. Keep provider-specific code inside adapters only.
+   - Main business logic must not depend on provider field names or webhook payload shape.
+
+5. Use backend-confirmed payment only.
+   - Redirect to success page is not proof of payment.
+   - Subscription activation must happen only after verified backend confirmation.
+
+Recommended backend structure:
+
+- `src/lib/payments/catalog.js`
+  - source of truth for plans, prices, durations, and enabled methods/providers
+- `src/lib/payments/service.js`
+  - create intent, validate plan/method, mark paid, credit days, generate activation flow
+- `src/lib/payments/providers/base.js`
+  - adapter contract
+- `src/lib/payments/providers/platega.js`
+- `src/lib/payments/providers/lava.js`
+- later: `src/lib/payments/providers/crypto.js`
+
+Recommended adapter contract:
+
+- `createPayment(intent)`
+- `verifyWebhook(request)`
+- `parseWebhook(request)`
+- `normalizeStatus(payload)`
+- optional `getPaymentStatus(providerPaymentId)`
+
+Recommended API shape:
+
+- `POST /payment/create`
+  - input: `plan_code`, `method`, `email`, optional `provider_preference`
+  - output: normalized response containing `payment_id`, `status`, `redirect_url` and/or provider-specific display data
+- `GET /payment/:id`
+  - returns normalized payment status
+- `POST /payment/webhook/:provider`
+  - provider-specific ingress, normalized internally
+
+Recommended normalized payment statuses:
+
+- `created`
+- `pending`
+- `waiting_user`
+- `paid`
+- `failed`
+- `cancelled`
+- `refunded`
+- `expired`
+
+Provider-specific statuses must be stored separately as `provider_status`.
 
 ---
 
@@ -59,8 +286,10 @@ Implement in this order (each testable independently with curl):
 - Output: `{ xray_uuid, server_address, server_port, plan, cabinet_url }`
 - Deduplication: if `android_id` is missing, create account but flag it for review.
 
+`cabinet_url` is now a generic owner-cabinet entry URL (`/cabinet`), not a device-authorized management page.
+
 **`GET /status/:xray_uuid`**
-- Output: plan, days remaining, traffic consumed, throttle_mbps, current_domain (for client fallback chain updates).
+- Output: plan, days remaining, traffic consumed, throttle_mbps, current_domain (for client fallback chain updates), `family_role` ("owner" / "member" / null — used by the Android client to show/hide family controls).
 - Polled by client every 30–60s while VPN is active.
 
 **`GET /servers`**
@@ -83,6 +312,7 @@ Serve as static/template HTML from Client Backend. Must work on old Android WebV
 ### 1.5 APK Download Endpoint ✅
 
 - ✅ `GET /download/apk` — serves APK with `Content-Type: application/vnd.android.package-archive`.
+- ✅ `GET /get` — download landing page served from the disposable domain; card-grid design matching `website/index.html`; JS refreshes file sizes from `/api/public/downloads`; used as the share URL by regular family members in the Android app.
 - APK stored at `/opt/vsemoi/vsemoivpn.apk` on the host, mounted read-only into the container via `docker-compose.yml` volumes. Not in git.
 
 ### 1.6 Xray gRPC Client ✅
@@ -110,7 +340,7 @@ Runs on Xray VPS host as a systemd service (not in Docker — intentional):
 - ✅ `/status` returns the **live** `throttle_mbps` by querying `GET /throttle/:port` on the tc-agent. Falls back to env-var default if tc-agent is unreachable.
 - ✅ Bootstrap throttle applied at agent startup via `/etc/tc-agent.env`. Survives reboots.
 - ✅ `POST /admin/throttle` on the client-backend — operator can update the free/paid tier throttle without SSH. Protected by `ADMIN_SECRET` header. Body: `{ tier, rate_kbps }`.
-- **Multi-server TODO (Phase 2)**: `TC_AGENT_URL` is currently a single env var (single-server PoC). When multiple Xray VPSes are added, `status.js` and `admin.js` must look up `servers.tc_agent_url` by `devices.assigned_server_id` instead.
+- ✅ **Multi-server throttle (Phase 2, COMPLETE 2026-04-07)**: `status.js` looks up `servers.tc_agent_url` by `devices.assigned_server_id`; `admin.js /admin/throttle` broadcasts to all active servers. Falls back to `TC_AGENT_URL` env var if column is NULL.
 
 ### 1.9 Nginx Reverse Proxy + TLS ✅
 
@@ -120,14 +350,16 @@ The VPS runs nginx (host process) which was already managing other sites. Caddy 
 - ✅ TLS via Let's Encrypt / certbot (`--nginx` driver). Cert auto-renews.
 - ✅ `.github/workflows/nginx.yml` — deploys config to `/etc/nginx/sites-enabled/` and runs certbot on first deploy.
 
-### 1.10 Docker Compose Deployment ✅
+### 1.10 Docker Swarm Deployment ✅ (migrated from Compose 2026-04-07)
 
-No Docker Swarm — single VPS at this stage. Services managed by `docker-compose.yml` + per-service GitHub Actions workflows (self-hosted runner on the VPS).
+Single-manager Swarm on Ziplex. Kamatera workers join automatically via bootstrap script.
 
-- ✅ Services: `postgres`, `redis`, `client-backend`, `xray`
-- ✅ Secrets via files in `/opt/actions-runner-vsemoi/env/` (outside git)
-- ✅ Workflows: `infrastructure.yml`, `client-backend.yml`, `xray.yml`, `nginx.yml`
-- Swarm migration deferred to Phase 2 if/when multi-node is needed.
+- ✅ `infra/swarm/stack.yml` — 6 permanent services: postgres, redis, client-backend, orchestrator, health-monitor, xray; all constrained to manager node; ports mode: host; update_config order: stop-first
+- ✅ `infra/swarm/deploy.sh` — sources all env files, creates postgres_password Swarm secret, runs `docker stack deploy`
+- ✅ Secrets: `postgres_password` as external Swarm secret; all others via env file sourcing
+- ✅ GH Actions workflows: `docker build + docker service update --force` per service; `infrastructure.yml` triggers `deploy.sh`
+- ✅ `orchestrator` mounts `/var/run/docker.sock` for dockerode (labels nodes, creates xray-{ip} services)
+- ✅ Dynamic Xray services: `xray-{ip}` per Kamatera worker, pinned by `node.labels.xray.node.{ip}==true`
 
 ### 1.11 Android Client Updates
 
@@ -148,7 +380,9 @@ No Docker Swarm — single VPS at this stage. Services managed by `docker-compos
   - ✅ Collapsible "УПРАВЛЕНИЕ ПОДПИСКОЙ" block with comparison table; chevron rotates 200 ms on expand/collapse
   - ✅ Collapsed hint badge (`tv_sub_traffic_hint`): shows days/traffic warning when block is collapsed
   - ✅ Comparison table free-traffic cell wired dynamically to `PREF_TRAFFIC_TOTAL_GB` (from `traffic_cap_mb` in `/status`)
-  - ✅ "Оплатить подписку", "Продлить подписку", "Личный кабинет" buttons open `cabinet_url` from backend; cabinet link hidden for free users
+  - ✅ `Оплатить подписку` / `Продлить подписку` open backend `/payment`
+  - ✅ `Личный кабинет` removed from the main screen and moved into the drawer menu
+  - ✅ drawer `Личный кабинет` opens backend `/cabinet`, which authenticates owner access by email + one-time code
   - ✅ Animated toolbar/VPN area backgrounds (colour-cycling via `ValueAnimator.ofArgb`)
   - ✅ App-open re-provision rate-limited to 30 min (`PREF_LAST_STATUS_POLL_MS`): re-registers UUID with Xray + fetches fresh VLESS URI; falls back to cached config on failure
 - ✅ `POST /admin/token` on client-backend — operator generates single-use activation tokens without DB access. Body: `{ xray_uuid, days, expires_hours? }`. Returns `token`, `activation_url`, `expires_at`.
@@ -250,38 +484,48 @@ Contract between Health Monitor and Orchestrator. Events fire on state **transit
 - `PlacementPolicy` is the extension point for: multi-zone awareness, IP-blocking pre-check (provision hourly → probe from Russian IP → commit or retry), multi-provider support.
 - `TC_AGENT_URL` per-server lookup in client-backend (`status.js`, `admin.js`) is a separate TODO for when a second server is live.
 
-### 2.6 Zone-Based Server Selection (next to build)
+### 2.6 Zone-Based Server Selection ✅ COMPLETE (2026-04-06)
 
-**Design decisions (finalized 2026-04-06):**
-- UI shows zones (city-level labels), not individual servers. `servers.display_name` stores the Russian zone label.
-- Free users: backend auto-assigns server; zones visible in dropdown but tapping shows upsell dialog.
-- Paid users: can select any zone; backend picks healthiest `active` server in that zone.
-- `tier` column is NOT used for client-facing zone filtering — both current servers are `'both'`.
-- Server change flow: Android → `POST /servers/select { zone }` → backend does gRPC migration (RemoveUser old server, AddUser new server, update `devices.assigned_server_id`) → returns new VLESS URI → Android stores URI and reconnects.
+- ✅ `GET /zones` — public; returns `[{ zone, region, available }]` grouped by display_name/region
+- ✅ `POST /servers/select` — x-device-fingerprint auth; body `{ region }`; gRPC migration (removeUserAt old, addUserAt new); returns `{ ok, vless_uri, zone, region }`
+- ✅ `servers.region` column added (migration `20260406120000-add-server-region.js`; EU-MD for server 1, EU-FR for server 2)
+- ✅ `provision.js` bug fixed: was calling `xrayGrpc.addUser()` on local xray:8080 regardless of assigned server; fixed to `addUserAt(server.xray_grpc_addr || DEFAULT_GRPC_ADDR)`
+- ✅ Android: `ZonePickerAdapter` (BaseAdapter, header+zone types), `ListPopupWindow` anchored to rowServer, 55% screen height, grouped by region, free-user upsell dialog, `restartV2Ray()` only if connected
 
-**Backend tasks:**
-- `GET /zones` (or update `GET /servers`): return zone-grouped list `[{ zone, region, available }]`. Do not expose server IPs or IDs.
-- Consider adding `servers.region` column (e.g. `'EU-MD'`, `'EU-FR'`) as a stable zone key (migration needed).
-- `POST /servers/select`: body `{ zone }`, headers `x-device-fingerprint` + `x-android-id`. Verify paid plan, find healthiest server in zone, gRPC-migrate UUID, update DB, return `{ ok, vless_uri }`. Free user → 403 `upgrade_required`. No active server → 503 `zone_unavailable`.
+### 2.6a Orchestrator: Server Termination ✅ COMPLETE (2026-04-07)
 
-**Android tasks:**
-- Call `GET /zones` on resume; populate zone dropdown in `MainViewModel`.
-- Free user taps zone → upsell `AlertDialog` → button opens `cabinet_url`.
-- Paid user taps zone → call `POST /servers/select` → on success store VLESS URI + reconnect; on error show dialog.
-- Highlight currently connected zone.
+- ✅ `POST /admin/terminate-server` — body `{ server_id }`, x-admin-secret auth; powers off then terminates; sets `servers.status = 'dead'`
+- ✅ `terminateServer()` uses `DELETE /server/{id}/terminate` with `{ confirm: 1, force: 1 }`
+- ✅ `display_name` auto-populated on provision from `DATACENTER_DISPLAY_NAME` map in `scaling.js`
+- ⚠️ **UNTESTED ASSUMPTION**: `force:1` assumed reliable for running servers (previous "General Error" 2026-04-06 may have been transient). Verify on next test server creation: terminate while running, confirm force:1 succeeds without prior power-off.
+- Power-off API (`PUT /server/{id}/power`) investigated but abandoned — Kamatera docs show POST but API returns 405; body format unclear. `docs/kamatera-api.md` updated.
 
 ### 2.7 Phase 2 Pending Items
 
-- **Zone-based server selection** — see §2.6 above. Backend + Android. Handoff doc: `HANDOFF_server_selection.md`.
-- **Multi-server throttle**: `TC_AGENT_URL` in `status.js` and `admin.js` is a single env var. Fix: look up `servers.tc_agent_url` for `device.assigned_server_id` and use that. Needed now that server 2 is live.
-- **Real-time speed ring**: hook `MainViewModel` speed tracking into donut ring animation.
+- ✅ Zone-based server selection — COMPLETE (§2.6)
+- ✅ Multi-server throttle — COMPLETE (§1.8, §2.6a)
+- ~~Real-time speed ring~~ — **dropped**: static throttle-cap display is more informative than live throughput.
+- ⚠️ Verify `force:1` termination assumption — see §2.6a
 
-### 2.8 Swarm Multi-Node Prep
+### 2.8 Docker Swarm Migration ✅ COMPLETE (2026-04-07)
 
-- Add placement constraints to `swarm-stack.yml` so Xray containers are pinned to their VPS nodes by label.
-- tc agent installation is part of the server bootstrap script (not Swarm-managed).
+- ✅ Ziplex initialized as Swarm manager (node ID: ybijlox4upc8ex4cxilgaje8q)
+- ✅ `infra/swarm/stack.yml` + `infra/swarm/deploy.sh` replace docker-compose.yml for all permanent services
+- ✅ `infra/bootstrap-xray.sh`: §3 added — worker joins Swarm, writes `/tmp/swarm-node-id`
+- ✅ `orchestrator/src/lib/bootstrap.js`: steps 5–7 — reads nodeId, labels node via dockerode, creates xray-{ip} Swarm service
+- ✅ `orchestrator/package.json`: `dockerode ^4.0.4` added
+- ✅ DB migration `20260407120000-add-swarm-fields.js`: `servers.swarm_node_id`, `servers.swarm_service_name`
+- ✅ `scaling.js`: stores swarm_node_id + swarm_service_name in INSERT
+- ✅ All 4 GH Actions workflows updated to `docker service update --force`
+- ✅ End-to-end test passed: worker joined Swarm, labeled, xray-{ip} at 1/1 replica
+- ✅ **EU-FR client connectivity fixed (2026-04-08)**: `XRAY_PUBLIC_KEY` was missing from orchestrator service `environment:` block in `stack.yml` — provisioned servers got null `public_key` in `xray_params`, causing Reality handshake failure. Fixed.
+- ✅ **Dead server reassignment (2026-04-08)**: `provision.js` now handles dead/deleted assigned servers — reassigns device to best available server using 3-level zone fallback (exact zone → same continental prefix → any). `pickServer()` extended with `preferredRegion` param.
+- ✅ **Client zone flash fixed (2026-04-08)**: zone row shows "🌐 —" while re-provisioning instead of stale cached value.
+- ✅ **503 fallback chain fix (2026-04-08)**: client no longer retries fallback URLs on 503 (no servers available) — aborts immediately via `NoServersAvailableException`.
+- ⚠️ `PROVISION_BILLING=hourly` in orchestrator.env — **must revert to `monthly` before production**
+- ⚠️ Wire Health Monitor auto-termination to Redis (deferred)
 
-**Build order**: ~~Orchestrator domain rotation~~ ✅ → ~~Health Monitor~~ ✅ → ~~Orchestrator server scaling~~ ✅ → Zone-based server selection → Multi-server throttle.
+**Build order**: ~~Orchestrator domain rotation~~ ✅ → ~~Health Monitor~~ ✅ → ~~Orchestrator server scaling~~ ✅ → ~~Zone-based server selection~~ ✅ → ~~Multi-server throttle~~ ✅ → ~~Swarm migration~~ ✅ → ~~Client/server resilience fixes~~ ✅ → Phase 3.
 
 **Testable when**: Trigger `POST /admin/rotate-domain` → Gist updated → client picks up new domain on next poll. Kill an Xray container → Health Monitor detects → Orchestrator drains → clients get new server. Server hits 90% traffic → `server.draining` → new Kamatera VPS provisions.
 
@@ -292,53 +536,171 @@ Contract between Health Monitor and Orchestrator. Events fire on state **transit
 **Goal**: Real users can pay. Operators can manage accounts without DB access.
 
 ### Dependencies
-- YooKassa sandbox credentials available.
+- `platega.io` merchant credentials and webhook/API documentation available.
 - Payment amounts, plan durations, and refund policy decided.
 - Multi-user days redistribution policy finalized.
 - Telegram Bot token registered.
 
-### 3.1 YooKassa Integration
+### 3.1 Payment Gateway Integration (`platega.io`)
 
-- `POST /payment/create`: create YooKassa payment session, store pending record in `payments`, return redirect URL.
-- `POST /payment/webhook` (on vsemoi.online, proxied to Client Backend via Nginx): verify webhook signature, check idempotency (don't double-credit), update `payments` to confirmed, credit days, trigger same activation logic as `/activate`.
-- **Signature verification is not optional** — implement from day one.
-- Idempotency: YooKassa can send duplicates. Check `payments.status` before applying.
+- `POST /payment/create`: create `platega.io` payment session, store pending record in `payments`, return redirect URL.
+- `POST /payment/webhook` (on vsemoi.online, proxied to Client Backend via Nginx): verify provider authenticity/signature if supported, check idempotency (don't double-credit), update `payments` to confirmed, credit days, trigger same activation logic as `/activate`.
+- **Webhook authenticity verification is not optional** — implement from day one once provider docs are available.
+- Idempotency: payment providers can send duplicates or repeated status notifications. Check `payments.status` before applying.
+
+Implementation note:
+- even while integrating `platega.io` first, build the route and service layer around the multi-provider adapter model above so adding `lava.top` and crypto later does not require route redesign.
 
 ### 3.2 Payment UI Completion
 
-Complete the placeholder pages from Phase 1 with real YooKassa redirect flow. Pages must work on old Android WebViews — no ES6+, no CSS Grid assumptions.
+Complete the placeholder pages from Phase 1 with real payment redirect flow. Pages must work on old Android WebViews — no ES6+, no CSS Grid assumptions.
+
+Payment UI must be method-aware from the start:
+- allow multiple payment methods to be enabled/disabled by config
+- do not hardcode a single provider into the HTML flow
+- support future display variants such as redirect URL, QR payment, hosted checkout, or crypto invoice/address
+
+Current implementation status (2026-04-13):
+- backend-hosted `/payment`, `/payment/success`, `/payment/cancel` are implemented and work across both `vsemoi.online` and `vmonl.store`
+- payment page theme is now host-aware and can also be hinted explicitly with `theme=dark|light`
+- Android app now appends the explicit theme hint when opening `cabinet_url`
+- payment page branding now uses a reusable backend-served asset path (`/assets/logo.svg`)
+- public website pricing pages now render from `GET /api/public/plans` instead of duplicating plan data in static HTML
+- mobile pricing table copy/spacing has been shortened for better phone rendering
+
+Still pending in this area:
+- real `platega.io` adapter binding
+- real webhook signature verification
+- explicit support for provider-specific UI variants beyond the current redirect flow
 
 ### 3.3 Multi-User Management
 
-- `POST /users` — create sub-user, return activation deep link token.
-- `GET /users` — list sub-users with days allocated.
-- `POST /users/:id/allocate` — redistribute days.
-- Constraint: total allocated days ≤ remaining days derived from `accounts.paid_until`.
-- Constraint: 1 concurrent connection per sub-user.
+Canonical model locked on 2026-04-14:
 
-### 3.4 Paid Concurrency Enforcement
+- every paying identity is a **family account**
+- the creator is also the **first family member**
+- a normal single user is just a **family of one**
+- target end-state: payment credits the family-level deposit
+- if the family has only one active member, new credit may auto-allocate to that member
+- only after a second family member is added does explicit redistribution UI become visible
 
-- On `/provision` for paid user: check for existing active session for that sub-user (active = called `/status` within last 5 min).
-- If conflict: return error; Android client displays localized message to user.
-- This is a heuristic, not a cryptographic lock — document the limitation.
+Recommended backend entities:
+
+- `accounts` — owner identity, recovery email, cabinet access
+- `families` — one per owner account; shared paid deposit
+- `family_members` — actual consumer identities; device usage belongs here
+- `devices` — attached to `family_members`, not directly to the owner concept
+- `payments` — credit either a family deposit or a later standalone-emancipated family
+- `allocation_events` — audit log for deposit/member redistribution and emancipation
+
+Canonical entitlement semantics:
+
+- paid usage is tethered to both **time** and **traffic**
+- example: 30-day purchase => 30 days + 250 GB
+- 90-day purchase => 90 days + 750 GB
+- these values should be stored explicitly, not inferred later
+
+Canonical user states:
+
+- `free_active`
+- `free_exhausted`
+- `paid_active`
+- `paid_exhausted`
+
+Important rule:
+
+- paid users do **not** downgrade to free when days or paid traffic reach zero
+- they remain in the paid track, but in an exhausted state pending renewal
+
+Owner/member surface split:
+
+- owner cabinet: full family management, authenticated by email + one-time code
+- member view: subscription status inside the client; no full family-management rights from device identity alone
+
+Emancipation model ✅ COMPLETE (2026-04-24):
+
+- a regular family member who pays for themselves is automatically detached from the original family into a new family of their own
+- backend identifies the member by `device_fingerprint` (highest-priority lookup in `resolveAccount`)
+- payment page shows emancipation warning and pre-fills the member’s email
+- on payment confirmation, `emancipateMemberInTx` runs atomically: detaches the member, carries over remaining allocated days, credits new paid days on top, records a `member_emancipated` audit event in the original family’s history
+- the original family’s owner cabinet shows the emancipation event in transaction history
+
+Implementation caution:
+
+- an exploratory backend `/users` linked-account model exists from 2026-04-13
+- it is **not** the canonical design and should not be extended further
+
+Recommended next implementation order (updated 2026-04-14):
+1. add explicit paid/free exhaustion semantics before more family UX is built
+2. introduce canonical family tables and allocation bookkeeping
+3. migrate device ownership from top-level accounts toward family members
+4. replace the exploratory linked-account `/users` API with canonical family/deposit/member APIs
+5. expand the owner cabinet from today’s login scaffold into real family management pages
+
+Status update as of 2026-04-15:
+
+- steps 1–5 above have progressed substantially enough to validate the member runtime path in production
+- however, payment/renewal crediting is still transitional and not yet truly deposit-first
+- the next recommended implementation slice is:
+  1. move purchases/renewals to `family_deposit`
+  2. auto-allocate only for a true family of one
+  3. make all later member allocation/rebalance operations move days between member allocation and deposit
+
+Status update as of 2026-04-17 — deposit-first fully implemented and tested:
+
+- steps 1–3 above are complete
+- purchases/renewals credit `family_deposit`; single-member families auto-allocate immediately
+- multi-member families respect `allocation_policy` (`manual` or `auto_distribute_evenly`)
+- `POST /cabinet/api/family/members/:id/allocate` supports deposit-first with steal-from-richest fallback when deposit is insufficient
+- `POST /cabinet/api/family/policy` sets the family allocation policy
+- `POST /cabinet/api/family/rebalance` redistributes deposit days evenly across active members
+- `POST /cabinet/api/family/members/:id/remove` returns member days to deposit atomically, expires tokens, downgrades devices
+- email-optional member slots implemented: `display_name` required when no email provided; anonymous account created with NULL email
+- next major work item is the cabinet UI redesign (handoff at `HANDOFF_2026-04-16_cabinet_ui.md`)
+
+### 3.4 Paid Concurrency Enforcement ✅ COMPLETE (2026-04-17)
+
+- ✅ `/provision` checks `findActiveSiblingDevice` (active = `last_seen_at` within `PAID_SESSION_LOOKBACK_MIN`, default 5 min) and returns HTTP 409 with `code: paid_session_active` for paid users
+- ✅ `POST /provision/release` sets `last_seen_at = NOW() - interval '1 hour'` to immediately release the session lock when the user disconnects
+- ✅ Android: `PaidSessionActiveException` propagated through the fallback chain; caught in `provisionThenConnect()` to show a toast ("VPN уже активно на другом устройстве") without the generic failure dialog
+- ✅ `releaseProvisionSession()` called in FAB handler when stopping the VPN, before `stopVService()`
+- This is a heuristic, not a cryptographic lock — documented limitation
 
 ### 3.5 Subscription Recovery ("Восстановить подписку")
 
 **Context**: A paid user on a new phone (different `android_id`) has no automatic recovery path. Activation codes alone cannot be used for recovery — they are single-use and code-only re-activation would allow takeover if the code is leaked. Email OTP is required as a second factor.
 
-**Prerequisites**: email collected and stored in `accounts` at payment time (Phase 3.1 webhook must save it).
+**Prerequisites**: email collected and stored in `accounts` at payment time (Phase 3.1 payment confirmation flow must save it).
 
 **Recovery ladder**:
 1. Same-device reinstall/clear-data → automatic via `android_id` dedup in `/provision` (no user action needed)
 2. New phone / factory reset → "Восстановить подписку" email OTP flow (this section)
 3. Email forgotten / inaccessible → Telegram support → operator issues new token via `POST /admin/token`
 
-**Android**: Add "Восстановить подписку" item to `menu_drawer.xml`. On tap: open `https://vmonl.store/restore` in browser (no new Activity needed — `Utils.openUri`).
+**Android**: Add "Восстановить подписку" item to `menu_drawer.xml`. Preferred implementation: native two-step screen inside the app. The app should send `device_fingerprint` automatically; the user should only enter `email` and the 4-digit OTP. Browser fallback may remain for operator/support use, but it is not the target UX.
+
+Current implementation status (2026-04-12):
+- native Android recovery flow is implemented
+- end-to-end recovery was validated on-device
+- the user-facing flow is `email -> OTP -> done`
+- `device_fingerprint` is sent automatically by the app and is not shown to the user
+- the browser restore flow remains only as a scaffold/support fallback
+- dedicated recovery mockups were added to `ui_mockup_final.html`
+- light-theme and dark-theme screenshots were captured after testing for a final UX polish pass
 
 **Backend endpoints**:
 - `GET /restore` — HTML page with email input field
 - `POST /restore/send-code` — look up account by email; generate 4-digit OTP (short expiry, e.g. 10 min); send via email provider (Resend / Mailgun)
 - `POST /restore/verify` — validate OTP + `device_fingerprint` from body; reassign device to the account found by email; return success page
+
+Implementation note from testing:
+- browser form with manual `device_fingerprint` entry is usable only as a scaffold/support fallback
+- production user flow should hide `device_fingerprint` completely and have the Android client pass it automatically
+
+Owner cabinet access status (2026-04-14):
+- backend `/cabinet` owner login flow is implemented
+- owner access uses email + one-time code
+- Android no longer exposes owner cabinet on the main screen; it opens `/cabinet` from the drawer menu instead
 
 **Security constraints**:
 - OTP is 4 digits, expires in 10 min, single-use
@@ -365,7 +727,7 @@ Complete the placeholder pages from Phase 1 with real YooKassa redirect flow. Pa
 
 Security: bot must not expose account UUIDs in chat. Use short-lived lookup tokens or have the user send their UUID from app settings.
 
-**Testable when**: Test user completes YooKassa sandbox payment → receives deep link → taps it → upgraded to paid. Operator sends `/adddays` → days update in seconds. Paid user connects from second device → sees "session active" error.
+**Testable when**: Test user completes a test payment through `platega.io` → receives deep link → taps it → upgraded to paid. Operator sends `/adddays` → days update in seconds. Paid user connects from second device → sees "session active" error.
 
 ---
 
@@ -375,7 +737,7 @@ Security: bot must not expose account UUIDs in chat. Use short-lived lookup toke
 
 **Config/Secrets**: All secrets via Swarm secrets or env vars. No secrets in code or committed config files. Maintain `.env.example` documenting all required variables.
 
-**External call resilience**: All calls to Xray gRPC, Kamatera, Cloudflare, YooKassa must have timeouts and exponential backoff retry. Failure of any single external service must not crash the Client Backend.
+**External call resilience**: All calls to Xray gRPC, Kamatera, Cloudflare, and the payment provider must have timeouts and exponential backoff retry. Failure of any single external service must not crash the Client Backend.
 
 **DB migrations**: Run on container startup for simplicity at this scale.
 

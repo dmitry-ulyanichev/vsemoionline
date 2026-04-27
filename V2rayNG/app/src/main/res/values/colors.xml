@@ -36,4 +36,14 @@
     <color name="vsm_pay_btn">#1565C0</color>
     <color name="vsm_hint_text">#9E9E9E</color>
     <color name="vsm_pill_stroke">#33356CCC</color>
+    <color name="vsm_pill_fill">#141565C0</color>
+    <color name="vsm_restore_info_bg">#EAF2FF</color>
+    <color name="vsm_restore_error_bg">#FCE8E6</color>
+    <color name="vsm_restore_success_bg">#E8F5E9</color>
+    <color name="vsm_restore_input_bg">#FFFFFF</color>
+    <color name="vsm_restore_input_text">#263238</color>
+    <color name="vsm_restore_input_hint">#90A4AE</color>
+    <color name="vsm_restore_card_title">#212121</color>
+    <color name="vsm_restore_card_body">#616161</color>
+    <color name="vsm_restore_card_hint">#9E9E9E</color>
 </resources>

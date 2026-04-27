@@ -140,7 +140,7 @@
     <string name="msg_downloading_content">Downloading content</string>
     <string name="menu_item_export_proxy_app">Export to Clipboard</string>
     <string name="menu_item_import_proxy_app">Import from Clipboard</string>
-    <string name="per_app_proxy_settings">Per-app settings</string>
+    <string name="per_app_proxy_settings">Настройки приложений</string>
     <string name="per_app_proxy_settings_enable">Enable per-app</string>
 
     <!-- Preferences -->
@@ -233,11 +233,11 @@
     <string name="summary_pref_feedback">Feedback enhancements or bugs to GitHub</string>
     <string name="summary_pref_tg_group">Join Telegram Group</string>
     <string name="toast_tg_app_not_found">Telegram app not found</string>
-    <string name="title_privacy_policy">Privacy policy</string>
+    <string name="title_privacy_policy">Политика конфиденциальности</string>
     <string name="title_about">About</string>
-    <string name="title_source_code">Source code</string>
-    <string name="title_oss_license">Open Source licenses</string>
-    <string name="title_tg_channel">Telegram channel</string>
+    <string name="title_source_code">Исходный код</string>
+    <string name="title_oss_license">Лицензии открытого ПО</string>
+    <string name="title_tg_channel">Telegram канал</string>
     <string name="title_configuration_backup">Backup configuration</string>
     <string name="title_configuration_restore">Restore configuration</string>
     <string name="title_configuration_share">Share configuration</string>
@@ -415,6 +415,32 @@
     <string name="vsm_sub_label">Подписка:</string>
     <string name="vsm_sub_free">Бесплатно</string>
     <string name="vsm_cabinet_link">Личный кабинет</string>
+    <string name="vsm_restore_title">Восстановить подписку</string>
+    <string name="vsm_restore_eyebrow">Восстановление доступа</string>
+    <string name="vsm_restore_intro">Введите email, который вы указывали при оплате. Мы отправим 4-значный код и восстановим подписку на этом устройстве.</string>
+    <string name="vsm_restore_intro_step2">Код уже отправлен на вашу почту. Введите 4 цифры ниже, и мы восстановим подписку на этом устройстве.</string>
+    <string name="vsm_restore_email_label">Email</string>
+    <string name="vsm_restore_email_hint">example@mail.ru</string>
+    <string name="vsm_restore_send_code">Получить код</string>
+    <string name="vsm_restore_step1">Шаг 1. Подтвердите email</string>
+    <string name="vsm_restore_step1_body">Мы отправим короткий код на почту, которая привязана к вашей платной подписке.</string>
+    <string name="vsm_restore_code_label">Код подтверждения</string>
+    <string name="vsm_restore_code_hint">1234</string>
+    <string name="vsm_restore_confirm">Восстановить подписку</string>
+    <string name="vsm_restore_step2">Шаг 2. Введите код</string>
+    <string name="vsm_restore_step2_body">После проверки кода это устройство автоматически привяжется к вашему платному аккаунту.</string>
+    <string name="vsm_restore_email_required">Укажите email</string>
+    <string name="vsm_restore_code_required">Введите 4-значный код</string>
+    <string name="vsm_restore_code_sent">Код отправлен. Проверьте почту и введите его ниже.</string>
+    <string name="vsm_restore_success">Подписка восстановлена</string>
+    <string name="vsm_restore_success_intro">Платный аккаунт снова привязан к этому устройству. Обновляем конфигурацию и возвращаем вас на главный экран.</string>
+    <string name="vsm_restore_success_step">Что происходит дальше</string>
+    <string name="vsm_restore_success_body">Приложение автоматически обновляет конфигурацию. Если VPN уже был включён, подключение будет мягко перезапущено с платными параметрами.</string>
+    <string name="vsm_restore_generic_error">Не удалось восстановить подписку. Попробуйте ещё раз.</string>
+    <string name="vsm_restore_footer">Нужно только ввести email и 4-значный код. Приложение само привяжет это устройство в фоне.</string>
+    <string name="vsm_restore_done">Вернуться на главный экран</string>
+    <string name="vsm_restore_resend_code">Отправить код ещё раз</string>
+    <string name="title_pref_back">Назад</string>
 
     <!-- VseMoiOnline: Server row -->
     <string name="vsm_server_label">Сервер</string>
@@ -445,6 +471,9 @@
     <string name="vsm_code_activated">✓ Код успешно активирован</string>
     <string name="vsm_btn_family">❤ Подключите родных и близких</string>
     <string name="vsm_btn_renew">Продлить подписку</string>
+    <string name="vsm_share_label">Рекомендуйте наш VPN друзьям</string>
+    <string name="vsm_share_copy">Копировать ссылку</string>
+    <string name="vsm_share_copied">Ссылка скопирована</string>
 
     <!-- VseMoiOnline: Activation code input -->
     <string name="vsm_code_hint">Ввести код активации</string>

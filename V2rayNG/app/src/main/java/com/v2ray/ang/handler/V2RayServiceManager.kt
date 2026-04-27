@@ -31,12 +31,14 @@ object V2RayServiceManager {
     private val coreController: CoreController = Libv2ray.newCoreController(CoreCallback())
     private val mMsgReceive = ReceiveMessageHandler()
     private var currentConfig: ProfileItem? = null
+    private var serviceControlStrong: ServiceControl? = null
 
     var serviceControl: SoftReference<ServiceControl>? = null
         set(value) {
             field = value
-            Seq.setContext(value?.get()?.getService()?.applicationContext)
-            Libv2ray.initCoreEnv(Utils.userAssetPath(value?.get()?.getService()), Utils.getDeviceIdForXUDPBaseKey())
+            val service = value?.get()?.getService()
+            Seq.setContext(service?.applicationContext)
+            Libv2ray.initCoreEnv(Utils.userAssetPath(service), Utils.getDeviceIdForXUDPBaseKey())
         }
 
     /**
@@ -70,8 +72,24 @@ object V2RayServiceManager {
      * @param context The context from which the service is stopped.
      */
     fun stopVService(context: Context) {
-        context.toast(R.string.toast_services_stop)
-        MessageUtil.sendMsg2Service(context, AppConfig.MSG_STATE_STOP, "")
+        val service = getServiceControl()
+        if (service != null) {
+            Log.i(AppConfig.TAG, "Stop Service")
+            service.stopService()
+        } else if (coreController.isRunning) {
+            Log.w(AppConfig.TAG, "Stop Service requested without service control; stopping core directly")
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    coreController.stopLoop()
+                } catch (e: Exception) {
+                    Log.e(AppConfig.TAG, "Failed to stop V2Ray loop without service control", e)
+                }
+            }
+            MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_STOP_SUCCESS, "")
+            NotificationManager.cancelNotification()
+        } else {
+            MessageUtil.sendMsg2Service(context, AppConfig.MSG_STATE_STOP, "")
+        }
     }
 
     /**
@@ -79,6 +97,24 @@ object V2RayServiceManager {
      * @return True if the service is running, false otherwise.
      */
     fun isRunning() = coreController.isRunning
+
+    fun setServiceControl(control: ServiceControl) {
+        serviceControlStrong = control
+        serviceControl = SoftReference(control)
+    }
+
+    fun clearServiceControl(control: ServiceControl) {
+        if (serviceControlStrong === control) {
+            serviceControlStrong = null
+        }
+        if (serviceControl?.get() === control) {
+            serviceControl = null
+        }
+    }
+
+    private fun getServiceControl(): ServiceControl? {
+        return serviceControlStrong ?: serviceControl?.get()
+    }
 
     /**
      * Gets the name of the currently running server.
@@ -93,6 +129,7 @@ object V2RayServiceManager {
      */
     private fun startContextService(context: Context) {
         if (coreController.isRunning) {
+            MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_RUNNING, "")
             return
         }
         val guid = MmkvManager.getSelectServer() ?: return
@@ -107,8 +144,6 @@ object V2RayServiceManager {
 
         if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING)) {
             context.toast(R.string.toast_warning_pref_proxysharing_short)
-        } else {
-            context.toast(R.string.toast_services_start)
         }
         val intent = if ((MmkvManager.decodeSettingsString(AppConfig.PREF_MODE) ?: AppConfig.VPN) == AppConfig.VPN) {
             Intent(context.applicationContext, V2RayVpnService::class.java)
@@ -258,8 +293,8 @@ object V2RayServiceManager {
      * Gets the current service instance.
      * @return The current service instance, or null if not available.
      */
-    private fun getService(): Service? {
-        return serviceControl?.get()?.getService()
+    fun getService(): Service? {
+        return getServiceControl()?.getService()
     }
 
     /**
@@ -280,7 +315,7 @@ object V2RayServiceManager {
          * @return 0 for success, any other value for failure.
          */
         override fun shutdown(): Long {
-            val serviceControl = serviceControl?.get() ?: return -1
+            val serviceControl = getServiceControl() ?: return -1
             return try {
                 serviceControl.stopService()
                 0
@@ -313,7 +348,7 @@ object V2RayServiceManager {
          * @param intent The intent being received.
          */
         override fun onReceive(ctx: Context?, intent: Intent?) {
-            val serviceControl = serviceControl?.get() ?: return
+            val serviceControl = getServiceControl() ?: return
             when (intent?.getIntExtra("key", 0)) {
                 AppConfig.MSG_REGISTER_CLIENT -> {
                     if (coreController.isRunning) {

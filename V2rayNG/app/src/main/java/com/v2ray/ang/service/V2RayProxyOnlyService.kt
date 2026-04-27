@@ -6,10 +6,11 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.annotation.RequiresApi
+import com.v2ray.ang.AppConfig
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.handler.V2RayServiceManager
+import com.v2ray.ang.util.MessageUtil
 import com.v2ray.ang.util.MyContextWrapper
-import java.lang.ref.SoftReference
 
 class V2RayProxyOnlyService : Service(), ServiceControl {
     /**
@@ -17,7 +18,7 @@ class V2RayProxyOnlyService : Service(), ServiceControl {
      */
     override fun onCreate() {
         super.onCreate()
-        V2RayServiceManager.serviceControl = SoftReference(this)
+        V2RayServiceManager.setServiceControl(this)
     }
 
     /**
@@ -28,7 +29,9 @@ class V2RayProxyOnlyService : Service(), ServiceControl {
      * @return The start mode.
      */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        V2RayServiceManager.startCoreLoop()
+        if (!V2RayServiceManager.startCoreLoop()) {
+            MessageUtil.sendMsg2UI(this, AppConfig.MSG_STATE_START_FAILURE, "")
+        }
         return START_STICKY
     }
 
@@ -37,6 +40,7 @@ class V2RayProxyOnlyService : Service(), ServiceControl {
      */
     override fun onDestroy() {
         super.onDestroy()
+        V2RayServiceManager.clearServiceControl(this)
         V2RayServiceManager.stopCoreLoop()
     }
 
