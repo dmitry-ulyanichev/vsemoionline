@@ -1,5 +1,68 @@
 # VseMoiOnline: Implementation Plan
 
+
+## Updates (2026-04-28)
+
+### Xray multi-VPS placement + Kamatera traffic windows
+
+Completed in this session:
+
+- Confirmed Kamatera monthly traffic is prorated for servers created after the 1st of the month, then resets to the full monthly package at the next billing cycle.
+- Added server traffic-window handling:
+  - new Kamatera servers get a prorated first-month `traffic_cap_mb`
+  - `traffic_monthly_cap_mb` stores the full monthly package
+  - `traffic_resets_at` now points to the next UTC calendar-month boundary
+  - monthly reset restores `traffic_cap_mb = traffic_monthly_cap_mb`
+- Added a DB-backed provisioning placement model:
+  - `provisioning_regions`
+  - `provisioning_pools`
+  - `provisioning_datacenters`
+  - `servers.provisioning_pool_id`
+  - `servers.provisioning_datacenter_id`
+- Seeded the initial Europe workhorse placement path: `europe` -> `europe-primary` -> Kamatera `EU-FR`.
+- Replaced env-only datacenter choice with DB-backed placement selection. The v1 selection rule is:
+  - choose the requested or source-server pool
+  - pick enabled datacenters by lowest non-dead server count
+  - break ties by `sort_order`
+- Added nullable integer `weight` to datacenters as future metadata. It is intentionally ignored by the v1 picker.
+- Manual provisioning now accepts a target pool via `pool_code`, for example `{ "pool_code": "europe-primary" }`.
+- Health-triggered provisioning now uses the source server pool when the source server is linked to the placement model. Older unlinked servers fall back to `DEFAULT_PROVISION_POOL_CODE` (`europe-primary` by default).
+- Added `website/admin-provisioning.html` to manage regions, pools, and datacenters from the browser.
+- Added orchestrator admin APIs for the provisioning model and routed `vsemoi.online` `/admin/provisioning` and `/admin/provision-server` to the orchestrator.
+- Added regions and pools during manual testing:
+  - `europe-primary`, `europe-additional`
+  - `us-primary`, `us-additional`
+  - `middle-east-primary`, `middle-east-additional`
+- Added Kamatera datacenters during manual testing:
+  - `EU-FR` in `europe-primary`
+  - `EU` in `europe-primary`
+  - `EU-ST` in `europe-additional`
+  - `US-NY2` in `us-primary`
+  - `IL` in `middle-east-primary`
+
+Operational/testing notes:
+
+- The `Provision` button on the provisioning admin page performs real Kamatera provisioning after browser confirmation.
+- For cheap tests, `PROVISION_BILLING=hourly` can be set temporarily in `/opt/actions-runner-vsemoi/env/orchestrator.env`; set it back to `monthly` before production provisioning.
+- `PROVISION_BILLING`, `PROVISION_TRAFFIC`, `PROVISION_CPU`, `PROVISION_RAM_MB`, and `PROVISION_DISK_GB` still affect new server specs.
+- `PROVISION_DATACENTER` is no longer used by the placement picker. `PROVISION_IMAGE_ID` is only a fallback when a datacenter row has no `image_id`.
+- Tested browser-driven provisioning with hourly billing: Kamatera created the server and the client saw it as an option, but the admin page eventually showed `Failed to provision server: HTTP 504` because the synchronous request outlived the proxy/browser timeout.
+- A realistic health-signal test should publish to the Swarm Redis container, not the old Compose Redis container. The active subscriber was on `vsemoi_redis...`, while `vsemoionline-backend-redis-1` had zero subscribers.
+- Publishing `server.draining` is the low-risk realistic trigger: it should assess capacity and provision if needed, without draining current users. `server.exhausted` and `server.unreachable` are more disruptive because they call `drainServer(...)`.
+
+TODOs:
+
+- Improve provisioning admin UX for long-running real provisioning:
+  - show an immediate in-progress state after confirmation
+  - avoid waiting synchronously until the full Kamatera + SSH bootstrap completes
+  - expose provisioning/job status or poll by server/task id
+- Decide whether to expose `/admin/capacity` through nginx or keep it local-only on `127.0.0.1:3002`.
+- Link or intentionally classify pre-placement servers such as the current Madrid server (`EU-MD`) so future health signals do not rely on fallback pool behavior.
+- Add explicit admin controls for deleting or disabling pools/regions if needed; current page supports editing them and deleting datacenters.
+- Consider a future weighted placement algorithm using the existing nullable `weight` column after enough operational data exists.
+
+---
+
 ## Updates (2026-04-24)
 
 ### Backend housekeeping + canonical family bootstrap

@@ -17,6 +17,7 @@ import com.v2ray.ang.dto.AppInfo
 import com.v2ray.ang.extension.toast
 import com.v2ray.ang.extension.toastSuccess
 import com.v2ray.ang.extension.v2RayApplication
+import com.v2ray.ang.handler.ManagedClientRulesManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.util.AppManagerUtil
@@ -106,7 +107,10 @@ class PerAppProxyActivity : BaseActivity() {
     override fun onPause() {
         super.onPause()
         adapter?.let {
-            MmkvManager.encodeSettings(AppConfig.PREF_PER_APP_PROXY_SET, it.blacklist)
+            ManagedClientRulesManager.saveUserPackageSelection(
+                selectedPackages = it.blacklist,
+                visiblePackages = it.apps.map { app -> app.packageName }.toSet()
+            )
         }
     }
 

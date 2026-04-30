@@ -273,23 +273,63 @@ h1:first-of-type { margin-top: 0; }
 .sub-block {
   flex-shrink: 0; background: var(--surface);
   border-top: 1px solid var(--border);
+  z-index: 1;
 }
 .sub-header {
-  height: 38px; padding: 0 16px;
+  height: 44px; padding: 0 16px 0 86px;
   display: flex; align-items: center;
+  position: relative;
+  cursor: pointer;
 }
 .sub-header-title {
-  font-size: 11px; color: var(--th);
-  letter-spacing: .6px; flex: 1; font-weight: 600;
+  font-size: 0; color: var(--tp);
+  letter-spacing: 0; flex: 1; font-weight: 700;
 }
-.sub-chevron { font-size: 0; width: 14px; height: 14px; display: inline-flex; align-items: center; flex-shrink: 0; }
+.sub-header-title::before {
+  content: 'Подписка и лимиты';
+  font-size: 13px;
+}
+.sub-header::after {
+  content: 'Скрыть';
+  min-width: 82px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: var(--link);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(21,101,192,0.24);
+}
+.sub-block:not(:has(.sub-body)) .sub-header::after { content: 'Показать'; }
+.sub-chevron {
+  font-size: 0;
+  width: 56px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: absolute;
+  left: 16px;
+  top: -14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.10), 0 2px 4px rgba(0,0,0,0.06);
+}
 .sub-chevron::before {
-  content: ''; display: block; width: 14px; height: 14px;
-  background-color: var(--th);
+  content: ''; display: block; width: 22px; height: 22px;
+  background-color: var(--link);
   -webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>") center/contain no-repeat;
   mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>") center/contain no-repeat;
 }
-.sub-chevron.up::before { transform: rotate(180deg); }
+.sub-chevron.down::before { transform: rotate(180deg); }
+.sub-chevron.up::before { transform: rotate(0deg); }
 .sub-traffic-hint {
   font-size: 11px; font-weight: 700; margin-right: 10px;
   display: flex; align-items: center; gap: 4px;

@@ -3,14 +3,18 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/drawer_layout"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:clipChildren="false"
+    android:clipToPadding="false">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@color/vsm_toolbar"
         android:fitsSystemWindows="true"
-        android:orientation="vertical">
+        android:orientation="vertical"
+        android:clipChildren="false"
+        android:clipToPadding="false">
 
         <!-- ── Toolbar ─────────────────────────────────── -->
         <com.google.android.material.appbar.AppBarLayout
@@ -253,6 +257,7 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:clipChildren="false"
+            android:clipToPadding="false"
             android:background="@color/vsm_surface">
 
             <View
@@ -261,22 +266,22 @@
                 android:background="@color/vsm_border" />
 
             <!-- Header — always visible, tap to expand/collapse -->
-            <LinearLayout
+            <FrameLayout
                 android:id="@+id/layout_sub_header"
                 android:layout_width="match_parent"
-                android:layout_height="38dp"
-                android:orientation="horizontal"
-                android:paddingStart="@dimen/padding_spacing_dp16"
-                android:paddingEnd="@dimen/padding_spacing_dp16"
-                android:gravity="center_vertical"
+                android:layout_height="48dp"
+                android:clipChildren="false"
+                android:clipToPadding="false"
                 android:clickable="true"
                 android:focusable="true">
 
                 <TextView
                     android:id="@+id/tv_sub_block_title"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center_vertical"
+                    android:paddingStart="@dimen/padding_spacing_dp16"
+                    android:paddingEnd="76dp"
                     android:text="@string/vsm_sub_block_title"
                     android:textSize="11sp"
                     android:textStyle="bold"
@@ -287,19 +292,26 @@
                     android:id="@+id/tv_sub_traffic_hint"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="10dp"
+                    android:layout_gravity="end|center_vertical"
+                    android:layout_marginEnd="52dp"
                     android:textSize="11sp"
                     android:textStyle="bold"
                     android:visibility="gone" />
 
                 <ImageView
                     android:id="@+id/tv_sub_chevron"
-                    android:layout_width="14dp"
-                    android:layout_height="14dp"
+                    android:layout_width="35dp"
+                    android:layout_height="35dp"
+                    android:layout_gravity="end|top"
+                    android:layout_marginTop="-17dp"
+                    android:layout_marginEnd="8dp"
+                    android:padding="6dp"
+                    android:background="@drawable/sub_chevron_orb_bg"
+                    android:elevation="6dp"
                     android:src="@drawable/ic_chevron_down"
                     android:contentDescription="" />
 
-            </LinearLayout>
+            </FrameLayout>
 
             <!-- Collapsible body (VISIBLE = expanded by default) -->
             <LinearLayout

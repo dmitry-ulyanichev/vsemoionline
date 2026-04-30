@@ -1,0 +1,69 @@
+{
+  "version": 2026042902,
+  "updated_at": "2026-04-29T00:00:00Z",
+  "ttl_seconds": 86400,
+  "android": {
+    "enabled": true,
+    "app_mode": "bypass_selected_apps",
+    "packages": [
+      "ru.sberbankmobile",
+      "com.idamob.tinkoff.android",
+      "ru.vtb24.mobilebanking.android",
+      "ru.alfabank.mobile.android",
+      "ru.gazprombank.android.mobilebank.app",
+      "ru.raiffeisennews",
+      "ru.rosbank.android",
+      "ru.mtsbank.mobile",
+      "ru.otpbank.mobile",
+      "ru.rostel",
+      "ru.gosuslugi.goskey",
+      "ru.rtlabs.mobile.ebs.gosuslugi.android",
+      "ru.yandex.yandexmaps",
+      "ru.yandex.searchplugin",
+      "ru.yandex.mail",
+      "ru.yandex.disk",
+      "ru.yandex.taxi",
+      "ru.yandex.market",
+      "ru.yandex.kinopoisk",
+      "ru.kinopoisk",
+      "ru.rt.video.app.mobile",
+      "ru.ivi.client",
+      "com.vkontakte.android",
+      "ru.ok.android",
+      "ru.mail.mailapp",
+      "com.vk.mail",
+      "ru.mail.cloud",
+      "ru.wildberries",
+      "ru.ozon.app.android",
+      "ru.avito.android",
+      "ru.mts.mymts",
+      "ru.beeline.services",
+      "ru.megafon.mlk",
+      "ru.tele2.mytele2"
+    ],
+    "routing_domain_strategy": "IPIfNonMatch",
+    "routing_rules": [
+      {
+        "remarks": "VseMoiOnline: bypass private IPs",
+        "outboundTag": "direct",
+        "ip": ["geoip:private"],
+        "enabled": true,
+        "locked": true
+      },
+      {
+        "remarks": "VseMoiOnline: bypass Russia IPs",
+        "outboundTag": "direct",
+        "ip": ["geoip:ru"],
+        "enabled": true,
+        "locked": true
+      },
+      {
+        "remarks": "VseMoiOnline: bypass Russia domains",
+        "outboundTag": "direct",
+        "domain": ["geosite:category-ru", "domain:2ip.ru"],
+        "enabled": true,
+        "locked": true
+      }
+    ]
+  }
+}

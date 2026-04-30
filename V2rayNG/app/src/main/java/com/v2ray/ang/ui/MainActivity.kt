@@ -14,6 +14,7 @@ import android.content.res.Configuration
 import android.text.Editable
 import android.text.InputFilter
 import android.text.TextWatcher
+import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MenuItem
 import android.view.View
@@ -24,6 +25,7 @@ import android.view.animation.AlphaAnimation
 import android.view.animation.Animation
 import android.widget.EditText
 import android.widget.BaseAdapter
+import android.widget.FrameLayout
 import android.widget.TextView
 import android.view.ViewGroup
 import androidx.activity.OnBackPressedCallback
@@ -49,6 +51,7 @@ import com.v2ray.ang.extension.toast
 import com.v2ray.ang.extension.toastError
 import com.v2ray.ang.extension.toastSuccess
 import com.v2ray.ang.handler.AngConfigManager
+import com.v2ray.ang.handler.ManagedClientRulesManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.helper.SimpleItemTouchHelperCallback
 import com.v2ray.ang.handler.SpeedtestManager
@@ -89,6 +92,8 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         private const val PREF_LAST_STATUS_POLL_MS = "last_status_poll_ms"
         private const val PREF_SERVER_ZONE = "server_zone"
         private const val PREF_SERVER_REGION = "server_region"
+        private const val PREF_CLIENT_RULES_JSON = "client_rules_json"
+        private const val PREF_CLIENT_RULES_LAST_FETCH_MS = "client_rules_last_fetch_ms"
 
         private const val STATUS_POLL_INTERVAL_MS = 30 * 60 * 1000L // 30 minutes
 
@@ -314,6 +319,8 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         initGroupTab()
         setupViewModel()
         setupVsmUi()
+        applyCachedOrBundledClientRules()
+        refreshClientRulesIfNeeded()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -564,6 +571,87 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         Log.i(AppConfig.TAG, "VseMoiOnline: Provision data saved — plan=$plan uuid=$xrayUuid base=$baseUrl")
     }
 
+    private fun applyClientRulesFromProvision(json: org.json.JSONObject) {
+        val rules = json.optJSONObject("client_rules") ?: return
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+            .putString(PREF_CLIENT_RULES_JSON, rules.toString())
+            .putLong(PREF_CLIENT_RULES_LAST_FETCH_MS, System.currentTimeMillis())
+            .apply()
+        ManagedClientRulesManager.applyRules(rules, "provision")
+    }
+
+    private fun applyCachedOrBundledClientRules() {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val cached = prefs.getString(PREF_CLIENT_RULES_JSON, null)
+        if (!cached.isNullOrBlank()) {
+            try {
+                ManagedClientRulesManager.applyRules(org.json.JSONObject(cached), "cache")
+                return
+            } catch (e: Exception) {
+                Log.w(AppConfig.TAG, "VseMoiOnline: cached client rules are invalid: ${e.message}")
+                prefs.edit().remove(PREF_CLIENT_RULES_JSON).apply()
+            }
+        }
+
+        val bundled = Utils.readTextFromAssets(this, "vsemoionline_ru_bypass_rules.json")
+        if (bundled.isBlank()) return
+        try {
+            ManagedClientRulesManager.applyRules(org.json.JSONObject(bundled), "bundled")
+        } catch (e: Exception) {
+            Log.w(AppConfig.TAG, "VseMoiOnline: bundled client rules are invalid: ${e.message}")
+        }
+    }
+
+    private fun refreshClientRulesIfNeeded(force: Boolean = false) {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val backendBaseUrl = prefs.getString(PREF_BACKEND_BASE_URL, null) ?: return
+        val now = System.currentTimeMillis()
+        val ttlMs = cachedClientRulesTtlMs(prefs.getString(PREF_CLIENT_RULES_JSON, null))
+        val lastFetch = prefs.getLong(PREF_CLIENT_RULES_LAST_FETCH_MS, 0L)
+        if (!force && lastFetch > 0L && now - lastFetch < ttlMs) return
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val connection = java.net.URL("$backendBaseUrl/client-rules/android").openConnection()
+                    as java.net.HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 10_000
+                connection.readTimeout = 10_000
+
+                val responseCode = connection.responseCode
+                if (responseCode != java.net.HttpURLConnection.HTTP_OK) {
+                    connection.disconnect()
+                    Log.w(AppConfig.TAG, "VseMoiOnline: Client rules refresh HTTP $responseCode")
+                    return@launch
+                }
+
+                val responseText = connection.inputStream.bufferedReader().readText()
+                connection.disconnect()
+                val rules = org.json.JSONObject(responseText)
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                    .putString(PREF_CLIENT_RULES_JSON, rules.toString())
+                    .putLong(PREF_CLIENT_RULES_LAST_FETCH_MS, System.currentTimeMillis())
+                    .apply()
+                ManagedClientRulesManager.applyRules(rules, "refresh")
+            } catch (e: Exception) {
+                Log.w(AppConfig.TAG, "VseMoiOnline: Client rules refresh failed: ${e.message}")
+            }
+        }
+    }
+
+    private fun cachedClientRulesTtlMs(cachedRules: String?): Long {
+        return try {
+            val ttlSeconds = if (cachedRules.isNullOrBlank()) {
+                86_400L
+            } else {
+                org.json.JSONObject(cachedRules).optLong("ttl_seconds", 86_400L)
+            }
+            ttlSeconds.coerceIn(3_600L, 604_800L) * 1000L
+        } catch (e: Exception) {
+            86_400_000L
+        }
+    }
+
     /**
      * VseMoiOnline: Core two-cycle provisioning fallback chain.
      *
@@ -762,6 +850,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
                 val cabinetUrl = if (json.isNull("cabinet_url")) null else json.getString("cabinet_url")
 
                 saveProvisionData(xrayUuid, plan, vlessUri, provisionUrl, cabinetUrl)
+                applyClientRulesFromProvision(json)
                 val provZone   = if (json.isNull("zone"))   null else json.optString("zone")
                 val provRegion = if (json.isNull("region")) null else json.optString("region")
                 if (provZone != null || provRegion != null) {
@@ -1072,6 +1161,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
 
         // VseMoiOnline: Auto-provision on first launch if no servers configured
         checkAndAutoProvision()
+        refreshClientRulesIfNeeded()
     }
 
     /**
@@ -1494,13 +1584,11 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         updateSubBlock()
     }
 
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
     private fun toggleSubBlock() {
         val expanding = binding.layoutSubBody.visibility != View.VISIBLE
         binding.layoutSubBody.visibility = if (expanding) View.VISIBLE else View.GONE
-        binding.tvSubChevron.animate()
-            .rotation(if (expanding) 0f else 180f)
-            .setDuration(200)
-            .start()
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         val plan = prefs.getString(PREF_PLAN, "free") ?: "free"
         val days = prefs.getInt(PREF_PAID_DAYS_REMAINING, 0)
@@ -1509,6 +1597,62 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         val trafficPct = (trafficRemaining / trafficTotal).coerceIn(0f, 1f)
         val effectiveDays = if (plan == "paid" && trafficRemaining <= 0f) 0 else days
         updateCollapsedHint(expanding, plan, effectiveDays, trafficPct)
+        updateSubChevron(expanding, plan, effectiveDays, trafficPct, animate = true)
+    }
+
+    private fun updateSubChevron(
+        expanded: Boolean,
+        plan: String,
+        daysRemaining: Int,
+        trafficPct: Float,
+        animate: Boolean = false
+    ) {
+        val chevron = binding.tvSubChevron
+        chevron.animate().cancel()
+        chevron.imageTintList = ColorStateList.valueOf(
+            if (expanded) subscriptionActionColor(plan, daysRemaining, trafficPct)
+            else ContextCompat.getColor(this, R.color.vsm_hint_text)
+        )
+        chevron.setPadding(
+            if (expanded) dp(6) else 0,
+            if (expanded) dp(6) else 0,
+            if (expanded) dp(6) else 0,
+            if (expanded) dp(6) else 0
+        )
+        chevron.elevation = if (expanded) dp(6).toFloat() else 0f
+        if (expanded) {
+            chevron.setBackgroundResource(R.drawable.sub_chevron_orb_bg)
+        } else {
+            chevron.background = null
+        }
+        val params = (chevron.layoutParams as FrameLayout.LayoutParams).apply {
+            width = dp(if (expanded) 35 else 24)
+            height = dp(if (expanded) 35 else 24)
+            gravity = Gravity.END or (if (expanded) Gravity.TOP else Gravity.CENTER_VERTICAL)
+            topMargin = if (expanded) -dp(17) else 0
+            marginEnd = dp(if (expanded) 8 else 18)
+        }
+        chevron.layoutParams = params
+
+        val targetRotation = if (expanded) 0f else 180f
+        if (animate) {
+            chevron.animate()
+                .rotation(targetRotation)
+                .setDuration(200)
+                .start()
+        } else {
+            chevron.rotation = targetRotation
+        }
+    }
+
+    private fun subscriptionActionColor(plan: String, daysRemaining: Int, trafficPct: Float): Int {
+        val colorRes = when {
+            plan == "free" -> R.color.vsm_pay_btn
+            daysRemaining <= 3 || trafficPct < 0.10f -> R.color.vsm_sub_urgent
+            daysRemaining <= 5 || trafficPct <= 0.30f -> R.color.vsm_sub_warn
+            else -> R.color.vsm_sub_ok
+        }
+        return ContextCompat.getColor(this, colorRes)
     }
 
     private fun openThemedUrl(url: String) {
@@ -2021,6 +2165,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         // Initialize on every data refresh, not just on toggle
         val bodyVisible = binding.layoutSubBody.visibility == View.VISIBLE
         updateCollapsedHint(bodyVisible, plan ?: "free", effectiveDays, trafficFraction)
+        updateSubChevron(bodyVisible, plan ?: "free", effectiveDays, trafficFraction)
     }
 
     private fun trafficRingColor(fraction: Float): Int = ContextCompat.getColor(
