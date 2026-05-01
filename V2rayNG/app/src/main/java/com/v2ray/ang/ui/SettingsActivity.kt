@@ -1,12 +1,18 @@
 package com.v2ray.ang.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.os.Bundle
 import android.text.TextUtils
 import android.view.View
+import android.widget.Toast
 import androidx.activity.viewModels
+import androidx.appcompat.app.AlertDialog
 import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
+import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequest
@@ -16,6 +22,7 @@ import com.v2ray.ang.AppConfig
 import com.v2ray.ang.AppConfig.VPN
 import com.v2ray.ang.R
 import com.v2ray.ang.extension.toLongEx
+import com.v2ray.ang.handler.ManagedClientRulesManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SubscriptionUpdater
 import com.v2ray.ang.util.Utils
@@ -45,6 +52,7 @@ class SettingsActivity : BaseActivity() {
         private val vpnBypassLan by lazy { findPreference<ListPreference>(AppConfig.PREF_VPN_BYPASS_LAN) }
         private val vpnInterfaceAddress by lazy { findPreference<ListPreference>(AppConfig.PREF_VPN_INTERFACE_ADDRESS_CONFIG_INDEX) }
         private val vpnMtu by lazy { findPreference<EditTextPreference>(AppConfig.PREF_VPN_MTU) }
+        private val splitTunnelDiagnostics by lazy { findPreference<Preference>(AppConfig.PREF_VSM_SPLIT_TUNNEL_DIAGNOSTICS) }
 
         private val mux by lazy { findPreference<CheckBoxPreference>(AppConfig.PREF_MUX_ENABLED) }
         private val muxConcurrency by lazy { findPreference<EditTextPreference>(AppConfig.PREF_MUX_CONCURRENCY) }
@@ -192,6 +200,23 @@ class SettingsActivity : BaseActivity() {
                 hevTunRwTimeout?.summary = if (TextUtils.isEmpty(nval)) AppConfig.HEVTUN_RW_TIMEOUT else nval
                 true
             }
+            splitTunnelDiagnostics?.setOnPreferenceClickListener {
+                val diagnostics = ManagedClientRulesManager.buildDiagnosticsText(requireContext())
+                AlertDialog.Builder(requireContext())
+                    .setTitle(R.string.vsm_split_tunnel_diagnostics_title)
+                    .setMessage(diagnostics)
+                    .setNegativeButton(R.string.vsm_copy_diagnostics) { _, _ ->
+                        val clipboard = requireContext()
+                            .getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(
+                            ClipData.newPlainText("vsemoionline_diagnostics", diagnostics)
+                        )
+                        Toast.makeText(requireContext(), R.string.vsm_diagnostics_copied, Toast.LENGTH_SHORT).show()
+                    }
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+                true
+            }
         }
 
         override fun onStart() {
@@ -225,6 +250,10 @@ class SettingsActivity : BaseActivity() {
             domesticDns?.summary = MmkvManager.decodeSettingsString(AppConfig.PREF_DOMESTIC_DNS, AppConfig.DNS_DIRECT)
             dnsHosts?.summary = MmkvManager.decodeSettingsString(AppConfig.PREF_DNS_HOSTS)
             delayTestUrl?.summary = MmkvManager.decodeSettingsString(AppConfig.PREF_DELAY_TEST_URL, AppConfig.DELAY_TEST_URL)
+            splitTunnelDiagnostics?.summary = getString(
+                R.string.vsm_split_tunnel_diagnostics_summary,
+                (MmkvManager.decodeSettingsStringSet(AppConfig.PREF_PER_APP_PROXY_SET) ?: mutableSetOf()).size
+            )
 
             //updateHevTunSettings(MmkvManager.decodeSettingsBool(AppConfig.PREF_USE_HEV_TUNNEL, true))
             hevTunRwTimeout?.summary = MmkvManager.decodeSettingsString(AppConfig.PREF_HEV_TUNNEL_RW_TIMEOUT, AppConfig.HEVTUN_RW_TIMEOUT)

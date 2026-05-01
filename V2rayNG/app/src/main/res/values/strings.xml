@@ -192,6 +192,12 @@
     <string name="title_pref_vpn_interface_address">VPN Interface Address</string>
 
     <string name="title_pref_vpn_mtu">VPN MTU (default 1500)</string>
+    <string name="vsm_split_tunnel_diagnostics_title">Russia bypass diagnostics</string>
+    <string name="vsm_split_tunnel_diagnostics_summary_default">Russian banks, Gosuslugi, marketplaces, and operators connect directly.</string>
+    <string name="vsm_split_tunnel_diagnostics_summary">Russian banks, Gosuslugi, marketplaces, and operators connect directly. Active exceptions: %1$d</string>
+    <string name="vsm_client_rules_reconnect_required">Reconnect to apply the updated exclusions.</string>
+    <string name="vsm_copy_diagnostics">Copy</string>
+    <string name="vsm_diagnostics_copied">Diagnostics copied</string>
 
 
     <string name="title_pref_domestic_dns">Domestic DNS (Optional)</string>

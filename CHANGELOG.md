@@ -7,6 +7,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Backend + Android: managed Russia split-tunneling ruleset**
+  - Backend `/client-rules/android` and the bundled Android fallback ruleset now carry a substantially expanded Russian bypass package list: banks, Mir Pay/SBPay, Gosuslugi/Goskey, telecoms, Yandex/VK/Mail.ru, marketplaces, delivery, streaming, maps, and other common RU apps
+  - Added `package_prefixes` support for white-label banking clusters such as `ru.ftc.faktura.`, `ru.faktura.`, `ftc.faktura.`, `com.bifit.`, `com.bssys.`, and `com.isimplelab.`
+  - Android expands package prefixes against installed packages, then merges the result with explicit managed packages and existing user add/remove overrides
+  - Rules refreshes now track ruleset version, refresh time, managed/effective package counts, routing strategy, and RU geo/domain rule status
+  - Settings now includes a Russia bypass diagnostics dialog with copy-to-clipboard support for support tickets
+
+- **Android: local proxy authentication for split-tunnel privacy hardening**
+  - Local SOCKS/HTTP inbounds now use a persistent random app-private username/password instead of unauthenticated localhost access
+  - `hev-socks5-tunnel` is configured with the same SOCKS credential, preserving VPN mode while blocking unauthenticated local proxy use by excluded apps
+  - Internal HTTP-proxy callers now send `Proxy-Authorization`
+  - Tun2socks config logging no longer prints sensitive proxy credentials
+  - Diagnostics now reports the local proxy as password-protected and whether LAN proxy sharing is open or closed
+
+- **Android: split-tunnel support UX**
+  - Added Russian user-facing copy: "Российские банки, Госуслуги, маркетплейсы и операторы работают напрямую."
+  - If managed rules change while VPN is already running, the app asks the user to reconnect: "Переподключитесь, чтобы применить исключения."
+
 - **Backend + Android: member emancipation (self-payment detachment)**
   - Regular family members who pay for themselves are automatically detached from the original family and given a new family of their own
   - Payment page detects a regular member by device fingerprint and shows a warning: "До сих пор за вас платил другой пользователь" / "Произведя оплату, вы станете самостоятельным пользователем…"

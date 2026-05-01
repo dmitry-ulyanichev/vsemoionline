@@ -1,5 +1,151 @@
 # VseMoiOnline: Implementation Plan
 
+## Updates (2026-04-30)
+
+### Android Russia split tunneling — current state
+
+Completed in this session:
+
+- Expanded the managed Android bypass package list from MVP size to a broader Russian-market set:
+  - banks and business banking
+  - Mir Pay / SBPay / YooMoney / QIWI
+  - Gosuslugi / Goskey / government services / RZD / Russian Post
+  - MTS / Beeline / MegaFon / Tele2 / Rostelecom
+  - Yandex, VK/Mail.ru/OK/MAX
+  - marketplaces, food delivery, streaming, maps, classifieds, and common RU utilities
+- Added `android.package_prefixes` to the backend and bundled Android rulesets.
+- Added backend validation and admin UI support for `package_prefixes`.
+- Android now expands package prefixes against installed packages, so white-label bank clusters can be handled without listing every regional app explicitly.
+- Prefix expansion is merged into the same managed/user overlay model:
+  - managed explicit packages
+  - managed prefix-expanded packages
+  - user-added packages
+  - user-removed packages
+- Cached/bundled rules are applied on an IO coroutine so installed-package scanning does not block startup UI.
+- Added a Settings diagnostics row and dialog for support.
+- Added copy-to-clipboard for diagnostics.
+- Added reconnect prompt when rules change while VPN is running.
+- Added local proxy auth hardening:
+  - persistent random app-private local proxy username/password
+  - SOCKS inbound requires auth
+  - HTTP inbound uses matching accounts
+  - `hev-socks5-tunnel` uses the same SOCKS auth
+  - internal HTTP proxy calls send `Proxy-Authorization`
+  - tun2socks YAML is no longer logged
+
+Important caveat:
+
+- Split tunneling is operationally useful, not a privacy guarantee.
+- With local proxy auth, excluded apps should no longer be able to use the localhost proxy without credentials.
+- They may still detect that localhost ports exist.
+- If LAN proxy sharing is enabled, the proxy may bind beyond loopback; it remains password-protected but should be treated as trusted-network-only.
+
+Validation completed:
+
+- Android compile: `./gradlew :app:compilePlaystoreDebugKotlin` passed.
+- Backend tests from `client-backend`: `npm test` passed.
+- Smoke testing after rebuild/deploy looked promising, but full real-device testing remains in progress.
+
+### Ruleset maintenance — most economical workflow
+
+Goal: keep the Android package rules useful with the least ongoing manual work.
+
+Recommended source of truth:
+
+- Keep the deployable source of truth in the backend static ruleset first: `client-backend/src/lib/client-rules/android.js`.
+- Keep the Android bundled fallback in sync: `V2rayNG/app/src/main/assets/vsemoionline_ru_bypass_rules.json`.
+- Treat `white-lists.md` in the backend repo as the research/reference notebook, not as the deployable artifact.
+- Use `package_prefixes` for vendor clusters whenever possible. Prefixes are the cheapest maintenance win because one prefix can cover many regional bank apps installed on real devices.
+
+Recommended maintenance cadence:
+
+- Do small monthly reviews by default.
+- Do immediate reviews only when support reports a specific RU app not working, or when a major bank/government/marketplace app changes package name.
+- Do not try to keep an exhaustive list perfect. Prioritize apps that affect payment, identity, telecom access, delivery/marketplace usage, and top support complaints.
+
+Economical update loop:
+
+1. Collect evidence.
+   - Support ticket says app X fails.
+   - User diagnostics show whether split tunneling is on, ruleset version, managed/effective counts, and RU geo/domain rules.
+   - Ask for the package name if the user can provide it; otherwise identify it from Play/RuStore/APKMirror/APKPure/SBP registry or from a real-device `pm list packages` dump.
+
+2. Classify the app.
+   - If it is a known white-label bank vendor, prefer adding or relying on a prefix.
+   - If it is a major app with a stable package name, add it explicitly.
+   - If the package is uncertain or looks typo-prone, do not add it until verified on a real device or from a reliable listing.
+
+3. Patch both deployable artifacts.
+   - Backend: `client-backend/src/lib/client-rules/android.js`
+   - Android fallback: `V2rayNG/app/src/main/assets/vsemoionline_ru_bypass_rules.json`
+   - Increment ruleset `version`.
+   - Keep `updated_at` current.
+
+4. Run cheap validation.
+   - Parse the Android JSON fallback.
+   - Run backend tests from `client-backend`: `npm test`.
+   - Compile Android: `./gradlew :app:compilePlaystoreDebugKotlin`.
+
+5. Publish backend rules.
+   - Deploy backend.
+   - Publish through `/admin/client-rules/android` if the DB-published ruleset is in use.
+   - Confirm public `GET /client-rules/android` returns the new version.
+
+6. Verify on device opportunistically.
+   - Open Settings diagnostics and copy it.
+   - Confirm version and package counts.
+   - Confirm the target app appears selected in per-app bypass if installed.
+   - For high-priority reports, ask the affected user to reconnect VPN and retry the app.
+
+Rules for what to add:
+
+- Add explicit packages for:
+  - Sber/T-Bank/VTB/Alfa/Gazprombank/Raiffeisen/Otkritie/PSB/Sovcombank/Rosbank/RSHB/MKB and other high-volume banks
+  - Mir Pay / SBPay
+  - Gosuslugi / Goskey
+  - mobile operators
+  - Yandex/VK/Mail.ru/OK/MAX
+  - Wildberries/Ozon/Avito/MegaMarket/X5/Magnit/Vkusvill/Samokat/Kuper
+  - Kinopoisk/IVI/Okko/START/Wink/Rutube/KION
+  - 2GIS/Yandex Maps/RZD/Russian Post
+- Use prefixes for:
+  - `ru.ftc.faktura.`
+  - `ru.faktura.`
+  - `ftc.faktura.`
+  - `com.bifit.`
+  - `com.bssys.`
+  - `com.isimplelab.`
+- Avoid adding:
+  - packages that are not verified
+  - generic international apps users usually want inside the tunnel
+  - blocked/anti-censorship apps where direct RU routing defeats the product purpose
+
+Suggested next-session automation:
+
+- Create one small script in the backend repo that reads `client-backend/src/lib/client-rules/android.js` and writes the Android fallback JSON with the same package list, prefixes, routing rules, version, and TTL.
+- Add a test that compares backend static rules and Android fallback rules for equality on:
+  - `version`
+  - `ttl_seconds`
+  - `android.packages`
+  - `android.package_prefixes`
+  - `android.routing_domain_strategy`
+  - `android.routing_rules`
+- This removes the easiest human error: updating backend but forgetting the bundled fallback.
+
+Potential future admin improvement:
+
+- Add a "copy current public rules as Android fallback JSON" button or endpoint, but this is lower priority than a repo-local sync script because the fallback must be updated before app build time.
+
+Open technical checks:
+
+- Confirm on real devices that `geosite:category-ru` exists in shipped geo assets.
+- If not, switch to categories known to exist or bundle/update the geo assets.
+- Confirm local proxy auth does not break:
+  - VPN connect
+  - IP/speed test
+  - subscription update/download paths that use the local HTTP proxy
+  - apps excluded from VPN
+
 
 ## Updates (2026-04-28)
 

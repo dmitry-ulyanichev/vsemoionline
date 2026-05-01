@@ -44,7 +44,7 @@ class TProxyService(
             writeText(configContent)
         }
 //        Log.i(AppConfig.TAG, "Config file created: ${configFile.absolutePath}")
-        Log.d(AppConfig.TAG, "HevSocks5Tunnel Config content:\n$configContent")
+        Log.d(AppConfig.TAG, "HevSocks5Tunnel config created")
 
         try {
 //            Log.i(AppConfig.TAG, "TProxyStartService...")
@@ -56,6 +56,7 @@ class TProxyService(
 
     private fun buildConfig(): String {
         val socksPort = SettingsManager.getSocksPort()
+        val localProxyAuth = SettingsManager.getLocalProxyAuth()
         val vpnConfig = SettingsManager.getCurrentVpnInterfaceAddressConfig()
         return buildString {
             appendLine("tunnel:")
@@ -69,6 +70,8 @@ class TProxyService(
             appendLine("socks5:")
             appendLine("  port: ${socksPort}")
             appendLine("  address: ${AppConfig.LOOPBACK}")
+            appendLine("  username: ${localProxyAuth.first}")
+            appendLine("  password: ${localProxyAuth.second}")
             appendLine("  udp: 'udp'")
 
             // Read-write timeout settings

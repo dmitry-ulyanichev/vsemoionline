@@ -2,6 +2,91 @@
 
 ---
 
+## Updates (2026-04-30) — Russia split tunneling and local proxy hardening
+
+### Backend + bundled Android ruleset
+**Files**: `client-backend/src/lib/client-rules/android.js`, `V2rayNG/app/src/main/assets/vsemoionline_ru_bypass_rules.json`
+
+The small MVP package list was expanded into a broader Russian-market bypass list covering:
+- major banks and business banking apps
+- Mir Pay, SBPay, YooMoney, QIWI
+- Gosuslugi, Goskey, tax/FSSP/RZD/Russian Post and regional government apps
+- MTS, Beeline, MegaFon, Tele2, Rostelecom/Wink
+- Yandex, VK/Mail.ru/OK/MAX, marketplaces, food delivery, streaming, maps, classifieds, and common utilities
+
+Added `android.package_prefixes` for white-label banking providers where one prefix covers many regional bank apps:
+- `ru.ftc.faktura.`
+- `ru.faktura.`
+- `ftc.faktura.`
+- `com.bifit.`
+- `com.bssys.`
+- `com.isimplelab.`
+
+Backend validation and the admin rules UI now preserve and publish `package_prefixes`.
+
+### Android: prefix expansion + override preservation
+**Files**: `V2rayNG/app/src/main/java/com/v2ray/ang/handler/ManagedClientRulesManager.kt`, `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`
+
+`ManagedClientRulesManager.applyRules(context, rules, source)` now:
+- reads explicit managed package names
+- reads `package_prefixes`
+- expands prefixes against installed packages via `PackageManager`
+- stores the expanded managed set in `PREF_MANAGED_PER_APP_PROXY_SET`
+- stores the prefix set in `PREF_MANAGED_PER_APP_PROXY_PREFIX_SET`
+- rebuilds `PREF_PER_APP_PROXY_SET` from managed packages plus user-added packages minus user-removed packages
+
+User add/remove overlays remain the source of truth for manual changes. If a prefix expands differently after app install/uninstall, the effective set is rebuilt without discarding the user's overrides.
+
+Rules are applied from cache/bundled fallback on an IO coroutine because installed-package scanning can be slow.
+
+### Android: diagnostics and reconnect prompt
+**Files**: `SettingsActivity.kt`, `pref_settings.xml`, `strings.xml`, `values-ru/strings.xml`, `MainActivity.kt`
+
+Settings now has a "Russia bypass diagnostics" row. The dialog shows:
+- split tunneling enabled
+- bypass mode enabled
+- ruleset version
+- last network refresh time
+- managed package count
+- package prefix count
+- installed/effective bypass package count
+- routing domain strategy
+- whether RU GeoIP/domain direct rules are installed
+- local proxy bind/auth status
+- LAN proxy sharing status
+
+The dialog has a copy button so users can send diagnostics to support.
+
+When rules change while the VPN is already running, Android does not silently restart the VPN. It shows:
+`Переподключитесь, чтобы применить исключения.`
+
+### Android: local proxy leak hardening
+**Files**: `AppConfig.kt`, `SettingsManager.kt`, `V2rayConfig.kt`, `V2rayConfigManager.kt`, `TProxyService.kt`, `HttpUtil.kt`, `ManagedClientRulesManager.kt`
+
+Risk being addressed:
+- Android per-app bypass keeps selected apps outside the VPN tunnel.
+- The VPN client still needs a local SOCKS proxy for tun2socks.
+- If that local proxy is unauthenticated, a bypassed app can try `127.0.0.1:10808` / `10809` and potentially detect or use the proxy anyway.
+
+Mitigation implemented:
+- Generate and persist a random app-private local proxy username/password.
+- Configure SOCKS inbound with `auth = "password"` and matching account credentials.
+- Configure HTTP inbound with matching account credentials.
+- Pass the same SOCKS credentials to `hev-socks5-tunnel`.
+- Add `Proxy-Authorization` for internal HTTP proxy calls.
+- Stop logging the generated tun2socks YAML because it contains credentials.
+- Diagnostics now reports the local proxy as password-protected.
+
+Residual caveat:
+- A curious app may still detect that a localhost port exists, but it should no longer be able to use the proxy without the random credential.
+- If `pref_proxy_sharing_enabled` is enabled, the proxy can bind beyond loopback; it remains password-protected but should still be treated as a trusted-network-only mode.
+
+**Validation**:
+- `./gradlew :app:compilePlaystoreDebugKotlin` — passed.
+- Backend `npm test` from `client-backend` — passed after the backend ruleset/admin changes.
+
+---
+
 ## Updates (2026-04-27) — Android FAB responsiveness and VPN state hardening
 
 ### Android: larger FAB tap target and immediate connecting state

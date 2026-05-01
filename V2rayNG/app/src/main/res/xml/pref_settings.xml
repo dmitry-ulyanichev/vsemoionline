@@ -78,6 +78,11 @@
             android:summary="1500"
             android:title="@string/title_pref_vpn_mtu" />
 
+        <Preference
+            android:key="pref_vsm_split_tunnel_diagnostics"
+            android:summary="@string/vsm_split_tunnel_diagnostics_summary_default"
+            android:title="@string/vsm_split_tunnel_diagnostics_title" />
+
 <!--        <CheckBoxPreference-->
 <!--            android:defaultValue="true"-->
 <!--            android:key="pref_use_hev_tunnel"-->

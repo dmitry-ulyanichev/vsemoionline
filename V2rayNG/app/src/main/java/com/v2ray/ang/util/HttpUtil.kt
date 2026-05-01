@@ -4,6 +4,7 @@ import android.util.Log
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.AppConfig.LOOPBACK
 import com.v2ray.ang.BuildConfig
+import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.util.Utils.encode
 import com.v2ray.ang.util.Utils.urlDecode
 import java.io.IOException
@@ -211,6 +212,14 @@ object HttpUtil {
                 conn.useCaches = false
             }
 
+            if (port != 0) {
+                val localProxyAuth = SettingsManager.getLocalProxyAuth()
+                conn.setRequestProperty(
+                    "Proxy-Authorization",
+                    "Basic ${encode("${localProxyAuth.first}:${localProxyAuth.second}")}"
+                )
+            }
+
             //Add Basic Authorization
             url.userInfo?.let {
                 conn.setRequestProperty(
@@ -251,4 +260,3 @@ object HttpUtil {
         }
     }
 }
-

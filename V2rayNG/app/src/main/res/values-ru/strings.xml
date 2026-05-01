@@ -189,6 +189,12 @@
 
     <string name="title_pref_vpn_interface_address">Адрес интерфейса VPN</string>
     <string name="title_pref_vpn_mtu">VPN MTU (по умолчанию 1500)</string>
+    <string name="vsm_split_tunnel_diagnostics_title">Диагностика обхода российских сервисов</string>
+    <string name="vsm_split_tunnel_diagnostics_summary_default">Российские банки, Госуслуги, маркетплейсы и операторы работают напрямую.</string>
+    <string name="vsm_split_tunnel_diagnostics_summary">Российские банки, Госуслуги, маркетплейсы и операторы работают напрямую. Активных исключений: %1$d</string>
+    <string name="vsm_client_rules_reconnect_required">Переподключитесь, чтобы применить исключения.</string>
+    <string name="vsm_copy_diagnostics">Скопировать</string>
+    <string name="vsm_diagnostics_copied">Диагностика скопирована</string>
 
     <string name="title_pref_domestic_dns">Внутренняя DNS (необязательно)</string>
     <string name="summary_pref_domestic_dns">DNS</string>

@@ -11,6 +11,7 @@ import com.v2ray.ang.dto.NetworkType
 import com.v2ray.ang.dto.ProfileItem
 import com.v2ray.ang.dto.RulesetItem
 import com.v2ray.ang.dto.V2rayConfig
+import com.v2ray.ang.dto.V2rayConfig.InboundBean.InSettingsBean.AccountBean
 import com.v2ray.ang.dto.V2rayConfig.OutboundBean
 import com.v2ray.ang.dto.V2rayConfig.OutboundBean.OutSettingsBean
 import com.v2ray.ang.dto.V2rayConfig.OutboundBean.StreamSettingsBean
@@ -332,12 +333,14 @@ object V2rayConfigManager {
     private fun getInbounds(v2rayConfig: V2rayConfig): Boolean {
         try {
             val socksPort = SettingsManager.getSocksPort()
+            val localProxyAuth = SettingsManager.getLocalProxyAuth()
 
             v2rayConfig.inbounds.forEach { curInbound ->
                 if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING) != true) {
                     //bind all inbounds to localhost if the user requests
                     curInbound.listen = AppConfig.LOOPBACK
                 }
+                configureLocalInboundAuth(curInbound, localProxyAuth)
             }
             v2rayConfig.inbounds[0].port = socksPort
             val fakedns = MmkvManager.decodeSettingsBool(AppConfig.PREF_FAKE_DNS_ENABLED) == true
@@ -365,6 +368,21 @@ object V2rayConfigManager {
             return false
         }
         return true
+    }
+
+    private fun configureLocalInboundAuth(
+        inbound: V2rayConfig.InboundBean,
+        localProxyAuth: Pair<String, String>
+    ) {
+        val protocol = inbound.protocol.lowercase()
+        if (protocol != "socks" && protocol != "http") return
+        val settings = inbound.settings ?: V2rayConfig.InboundBean.InSettingsBean().also {
+            inbound.settings = it
+        }
+        settings.accounts = listOf(AccountBean(user = localProxyAuth.first, pass = localProxyAuth.second))
+        if (protocol == "socks") {
+            settings.auth = "password"
+        }
     }
 
     /**

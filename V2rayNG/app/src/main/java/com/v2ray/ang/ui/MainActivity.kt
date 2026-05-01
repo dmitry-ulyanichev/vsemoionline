@@ -577,28 +577,37 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
             .putString(PREF_CLIENT_RULES_JSON, rules.toString())
             .putLong(PREF_CLIENT_RULES_LAST_FETCH_MS, System.currentTimeMillis())
             .apply()
-        ManagedClientRulesManager.applyRules(rules, "provision")
+        ManagedClientRulesManager.markNetworkRefresh()
+        handleClientRulesApplyResult(ManagedClientRulesManager.applyRules(this, rules, "provision"))
     }
 
     private fun applyCachedOrBundledClientRules() {
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        val cached = prefs.getString(PREF_CLIENT_RULES_JSON, null)
-        if (!cached.isNullOrBlank()) {
-            try {
-                ManagedClientRulesManager.applyRules(org.json.JSONObject(cached), "cache")
-                return
-            } catch (e: Exception) {
-                Log.w(AppConfig.TAG, "VseMoiOnline: cached client rules are invalid: ${e.message}")
-                prefs.edit().remove(PREF_CLIENT_RULES_JSON).apply()
+        lifecycleScope.launch(Dispatchers.IO) {
+            val cached = prefs.getString(PREF_CLIENT_RULES_JSON, null)
+            if (!cached.isNullOrBlank()) {
+                try {
+                    val result = ManagedClientRulesManager.applyRules(applicationContext, org.json.JSONObject(cached), "cache")
+                    withContext(Dispatchers.Main) {
+                        handleClientRulesApplyResult(result)
+                    }
+                    return@launch
+                } catch (e: Exception) {
+                    Log.w(AppConfig.TAG, "VseMoiOnline: cached client rules are invalid: ${e.message}")
+                    prefs.edit().remove(PREF_CLIENT_RULES_JSON).apply()
+                }
             }
-        }
 
-        val bundled = Utils.readTextFromAssets(this, "vsemoionline_ru_bypass_rules.json")
-        if (bundled.isBlank()) return
-        try {
-            ManagedClientRulesManager.applyRules(org.json.JSONObject(bundled), "bundled")
-        } catch (e: Exception) {
-            Log.w(AppConfig.TAG, "VseMoiOnline: bundled client rules are invalid: ${e.message}")
+            val bundled = Utils.readTextFromAssets(applicationContext, "vsemoionline_ru_bypass_rules.json")
+            if (bundled.isBlank()) return@launch
+            try {
+                val result = ManagedClientRulesManager.applyRules(applicationContext, org.json.JSONObject(bundled), "bundled")
+                withContext(Dispatchers.Main) {
+                    handleClientRulesApplyResult(result)
+                }
+            } catch (e: Exception) {
+                Log.w(AppConfig.TAG, "VseMoiOnline: bundled client rules are invalid: ${e.message}")
+            }
         }
     }
 
@@ -632,9 +641,21 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
                     .putString(PREF_CLIENT_RULES_JSON, rules.toString())
                     .putLong(PREF_CLIENT_RULES_LAST_FETCH_MS, System.currentTimeMillis())
                     .apply()
-                ManagedClientRulesManager.applyRules(rules, "refresh")
+                ManagedClientRulesManager.markNetworkRefresh()
+                val result = ManagedClientRulesManager.applyRules(applicationContext, rules, "refresh")
+                withContext(Dispatchers.Main) {
+                    handleClientRulesApplyResult(result)
+                }
             } catch (e: Exception) {
                 Log.w(AppConfig.TAG, "VseMoiOnline: Client rules refresh failed: ${e.message}")
+            }
+        }
+    }
+
+    private fun handleClientRulesApplyResult(result: ManagedClientRulesManager.ApplyResult?) {
+        if (result?.changed == true && mainViewModel.isRunning.value == true) {
+            runOnUiThread {
+                toast(R.string.vsm_client_rules_reconnect_required)
             }
         }
     }

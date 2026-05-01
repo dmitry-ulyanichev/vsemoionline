@@ -246,6 +246,18 @@ object SettingsManager {
         return getSocksPort() + if (Utils.isXray()) 0 else 1
     }
 
+    fun getLocalProxyAuth(): Pair<String, String> {
+        var user = MmkvManager.decodeSettingsString(AppConfig.PREF_LOCAL_PROXY_AUTH_USER)
+        var pass = MmkvManager.decodeSettingsString(AppConfig.PREF_LOCAL_PROXY_AUTH_PASS)
+        if (user.isNullOrBlank() || pass.isNullOrBlank()) {
+            user = "vsm${Utils.getUuid().take(12)}"
+            pass = Utils.getUuid() + Utils.getUuid()
+            MmkvManager.encodeSettings(AppConfig.PREF_LOCAL_PROXY_AUTH_USER, user)
+            MmkvManager.encodeSettings(AppConfig.PREF_LOCAL_PROXY_AUTH_PASS, pass)
+        }
+        return user to pass
+    }
+
     /**
      * Initialize assets.
      * @param context The application context.
