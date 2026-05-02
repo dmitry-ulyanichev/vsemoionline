@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Android + Backend: native payment flow with restore handoff**
+  - Added a native Android payment screen that loads backend payment config, shows available plans and payment methods, and creates `/payment/create` intents without sending users to the website form
+  - The 3-month plan is preselected as the default when available
+  - After a payment intent is created, the app switches to a dedicated processing screen that polls `/payment/:id`, shows provider-checkout fallback, and changes to success/failure states automatically
+  - Existing-email conflicts now guide users toward subscription restoration: backend returns `email_belongs_to_existing_account`, and Android shows a `Восстановить подписку` CTA instead of exposing a database constraint error
+  - Restore-subscription screen accepts a prefilled email from the payment screen, reducing friction when a user is recovering access on a new/lost device
+  - Main screen pay/renew actions now open the native payment screen; successful payment/restore returns to main and refreshes provisioning
+
 - **Backend + Android: managed Russia split-tunneling ruleset**
   - Backend `/client-rules/android` and the bundled Android fallback ruleset now carry a substantially expanded Russian bypass package list: banks, Mir Pay/SBPay, Gosuslugi/Goskey, telecoms, Yandex/VK/Mail.ru, marketplaces, delivery, streaming, maps, and other common RU apps
   - Added `package_prefixes` support for white-label banking clusters such as `ru.ftc.faktura.`, `ru.faktura.`, `ftc.faktura.`, `com.bifit.`, `com.bssys.`, and `com.isimplelab.`

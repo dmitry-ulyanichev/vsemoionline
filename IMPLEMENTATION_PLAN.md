@@ -1,5 +1,105 @@
 # VseMoiOnline: Implementation Plan
 
+## Updates (2026-05-02)
+
+### Native Android payment flow — current state
+
+Completed in this session:
+
+- Added an in-app `PaymentActivity` and registered it in the Android manifest.
+- Replaced main-screen pay/renew browser launch with the native payment screen.
+- The native screen uses backend runtime config rather than hardcoded pricing:
+  - `GET /api/public/payment-config?currency=RUB`
+  - available plans
+  - available payment methods
+  - plan/method compatibility from `available_methods`
+- The `3m` plan is selected by default when available.
+- Payment creation sends:
+  - `plan_code`
+  - `currency`
+  - `billing_mode`
+  - `payment_method`
+  - `email`
+  - `device_fingerprint`
+  - `android_id`
+- Only the provider checkout URL opens externally; plan selection, email, waiting state, status polling, success/failure, and recovery handoff remain inside the app.
+
+### Payment processing UX
+
+The native payment screen now has explicit states:
+
+- Initial state:
+  - title: `Оплатить подписку`
+  - subtitle explains plan/method/email selection and that payment details are entered only on the provider side
+  - plan/method/email form is visible
+- Processing state:
+  - title: `Платёж обрабатывается`
+  - subtitle says the app checks status automatically
+  - form is hidden
+  - progress indicator is visible
+  - `Открыть оплату ещё раз` remains as fallback
+  - app polls `GET /payment/:id`
+- Success state:
+  - title: `Оплата подтверждена`
+  - user can return to main screen
+  - main screen refreshes provisioning
+- Failure state:
+  - title: `Оплата не прошла`
+  - user can go back and create a new payment
+
+This mirrors the website success-page behavior while staying native.
+
+### Existing-email restore handoff
+
+Problem found in testing:
+
+- Fresh emulator/device provisions as an anonymous free account.
+- User enters an email that already belongs to a paid account.
+- Old backend behavior tried to attach that email to the anonymous account.
+- PostgreSQL rejected the write with `idx_accounts_email_unique`.
+
+Implemented behavior:
+
+- Backend now checks whether the email belongs to another account before attaching it to a device/account resolved by `device_fingerprint` or `android_id`.
+- If the email belongs to another account, backend returns:
+  - HTTP 409
+  - `code: email_belongs_to_existing_account`
+  - user-facing restore guidance
+- Android catches that code and shows `Восстановить подписку`.
+- The restore screen opens natively and receives the email via `RestoreSubscriptionActivity.EXTRA_PREFILL_EMAIL`.
+- Restore email field is prefilled; the user only has to request the code.
+
+This is the intended lost-device/new-device path: if the user accidentally starts payment with an existing paid email, guide them to restore instead of charging again.
+
+### Files touched
+
+Android:
+
+- `V2rayNG/app/src/main/java/com/v2ray/ang/ui/PaymentActivity.kt`
+- `V2rayNG/app/src/main/res/layout/activity_payment.xml`
+- `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`
+- `V2rayNG/app/src/main/java/com/v2ray/ang/ui/RestoreSubscriptionActivity.kt`
+- `V2rayNG/app/src/main/AndroidManifest.xml`
+- `V2rayNG/app/src/main/res/values/strings.xml`
+- `V2rayNG/app/src/main/res/values-ru/strings.xml`
+
+Backend:
+
+- `client-backend/src/lib/payments/service.js`
+- `client-backend/src/routes/payment.js`
+- `client-backend/test/payment-account-resolution.test.js`
+
+Validation:
+
+- Android compile: `./gradlew :app:compilePlaystoreDebugKotlin` passed.
+- Backend tests from `client-backend`: `npm test` passed.
+
+Next sensible steps:
+
+- Add native cabinet screens or a cabinet API-backed account summary.
+- Consider persisting the last entered payment email locally to prefill future renewals on the same device.
+- Add a timeout/expired-payment state if provider confirmation stays pending beyond the polling window.
+
 ## Updates (2026-04-30)
 
 ### Android Russia split tunneling — current state

@@ -2,6 +2,71 @@
 
 ---
 
+## Updates (2026-05-02) — Native Android payment flow and restore handoff
+
+### Android: native payment screen
+**Files**: `V2rayNG/app/src/main/java/com/v2ray/ang/ui/PaymentActivity.kt`, `V2rayNG/app/src/main/res/layout/activity_payment.xml`, `V2rayNG/app/src/main/AndroidManifest.xml`, `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`, `V2rayNG/app/src/main/res/values/strings.xml`, `V2rayNG/app/src/main/res/values-ru/strings.xml`
+
+Added `PaymentActivity` as the in-app payment entry point for the main-screen `Оплатить подписку` and `Продлить подписку` actions.
+
+The screen now:
+- fetches `/api/public/payment-config?currency=RUB`
+- renders available plans and payment methods from backend runtime config
+- preselects the `3m` plan when available
+- collects the recovery email
+- sends `plan_code`, `currency`, `billing_mode`, `payment_method`, `email`, `device_fingerprint`, and `android_id` to `/payment/create`
+- opens only the provider checkout URL in the browser
+
+The provider checkout remains external by design because card/SBP/crypto entry belongs to the payment system, but the surrounding flow now stays native.
+
+### Android: payment processing state
+**Files**: `PaymentActivity.kt`, `activity_payment.xml`, `strings.xml`, `values-ru/strings.xml`
+
+After `/payment/create` succeeds, the app no longer leaves the original payment form visible. It switches to a dedicated processing state:
+- header changes from `Оплатить подписку` to `Платёж обрабатывается`
+- body tells the user: `Завершите оплату в открывшемся окне на сайте платёжной системы`
+- indeterminate progress indicator is shown
+- `Открыть оплату ещё раз` remains as a fallback
+- `/payment/:id` is polled automatically
+- confirmed payments switch to an `Оплата подтверждена` state with `Вернуться на главный экран`
+- failed payments switch to an `Оплата не прошла` state
+
+Returning from a successful payment sets `RESULT_OK`, so `MainActivity` refreshes provisioning just like after restore.
+
+### Android: existing-email restore handoff
+**Files**: `PaymentActivity.kt`, `RestoreSubscriptionActivity.kt`
+
+When the backend reports that the entered email already belongs to another subscription, Android now treats the situation as a recovery opportunity:
+- shows the backend message instead of a generic payment error
+- shows `Восстановить подписку`
+- opens the native restore screen
+- passes the entered email through `RestoreSubscriptionActivity.EXTRA_PREFILL_EMAIL`
+- pre-fills the restore email field
+
+This covers the lost-device/new-device case where a user naturally enters their existing paid email while trying to pay again.
+
+### Backend: duplicate-email payment guard
+**Files**: `client-backend/src/lib/payments/service.js`, `client-backend/src/routes/payment.js`, `client-backend/test/payment-account-resolution.test.js`
+
+`resolveAccount()` no longer blindly writes an email onto a device/account when that email already belongs to another account.
+
+New behavior:
+- before attaching email to a device/account found by `device_fingerprint` or `android_id`, backend checks `accounts` by `LOWER(email)`
+- if another account owns the email, backend throws a domain error:
+  - `statusCode = 409`
+  - `code = email_belongs_to_existing_account`
+  - message tells the user to restore the subscription or use another email
+- `POST /payment/create` includes `code` in JSON error responses
+- regression test verifies no `UPDATE accounts SET email` is attempted in the conflict case
+
+This replaces the previous PostgreSQL `idx_accounts_email_unique` violation with a user-facing restore path.
+
+### Validation
+- Android: `./gradlew :app:compilePlaystoreDebugKotlin` — passed
+- Backend: `npm test` from `client-backend` — passed after adding the payment account-resolution regression test
+
+---
+
 ## Updates (2026-04-30) — Russia split tunneling and local proxy hardening
 
 ### Backend + bundled Android ruleset

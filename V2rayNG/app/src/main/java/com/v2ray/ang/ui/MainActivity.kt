@@ -173,6 +173,11 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
             refreshProvisionAfterRestore()
         }
     }
+    private val paymentActivity = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (it.resultCode == Activity.RESULT_OK) {
+            refreshProvisionAfterRestore()
+        }
+    }
     private val tabGroupListener = object : TabLayout.OnTabSelectedListener {
         override fun onTabSelected(tab: TabLayout.Tab?) {
             val selectId = tab?.tag.toString()
@@ -1705,11 +1710,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     }
 
     private fun openPaymentUrl() {
-        val baseUrl = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-            .getString(PREF_BACKEND_BASE_URL, null) ?: return
-        val fingerprint = getOrCreateDeviceId()
-        val url = "${baseUrl.removeSuffix("/")}/payment?device_fingerprint=${Uri.encode(fingerprint)}"
-        openThemedUrl(url)
+        paymentActivity.launch(Intent(this, PaymentActivity::class.java))
     }
 
     private fun getShareUrl(): String? {

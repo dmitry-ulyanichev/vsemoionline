@@ -24,6 +24,8 @@ class RestoreSubscriptionActivity : BaseActivity() {
     }
 
     companion object {
+        const val EXTRA_PREFILL_EMAIL = "extra_prefill_email"
+
         private const val PREFS_NAME = "vsemoionline_prefs"
         private const val PREF_BACKEND_BASE_URL = "backend_base_url"
         private const val PRIMARY_PROVISION_URL = "https://vmonl.store/provision"
@@ -46,6 +48,19 @@ class RestoreSubscriptionActivity : BaseActivity() {
             setResult(Activity.RESULT_OK)
             finish()
         }
+
+        prefillEmailFromIntent()
+    }
+
+    private fun prefillEmailFromIntent() {
+        val email = intent.getStringExtra(EXTRA_PREFILL_EMAIL)
+            ?.trim()
+            ?.lowercase()
+            .orEmpty()
+        if (email.isBlank()) return
+
+        binding.etRestoreEmail.setText(email)
+        binding.etRestoreEmail.setSelection(binding.etRestoreEmail.text?.length ?: 0)
     }
 
     private fun backendBaseUrl(): String {

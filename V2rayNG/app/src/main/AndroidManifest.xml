@@ -122,6 +122,10 @@
             android:name=".ui.RestoreSubscriptionActivity"
             android:exported="false"
             android:theme="@style/AppThemeDayNight.NoActionBar" />
+        <activity
+            android:name=".ui.PaymentActivity"
+            android:exported="false"
+            android:theme="@style/AppThemeDayNight.NoActionBar" />
 
         <activity
             android:name=".ui.SubEditActivity"
