@@ -2,6 +2,86 @@
 
 ## Updates (2026-05-02)
 
+### Native Android cabinet — current state
+
+Completed in this session:
+
+- Added an in-app `CabinetActivity` and registered it in the Android manifest.
+- Replaced the paid-user drawer cabinet browser launch with the native cabinet screen.
+- The native cabinet uses the existing backend cabinet JSON APIs after obtaining a normal `cabinet_session`.
+- The screen supports:
+  - account/family summary
+  - member list
+  - add member
+  - edit member name
+  - remove non-owner member
+  - allocate one day
+  - distribute days evenly
+  - reissue activation code
+  - copy/open activation links
+  - refresh
+  - renew via native payment
+  - logout
+- Mutating cabinet operations mark the activity as changed; returning to `MainActivity` can refresh provisioning/status.
+
+### Trusted-device cabinet access
+
+Problem found after initial implementation:
+
+- The Android client only shows `Личный кабинет` to paid users that the backend already recognizes.
+- Requiring email one-time-code login inside the app repeats authorization that already happened through provisioning/status identity.
+- That extra step makes sense on the public web page, but it is redundant in the paid Android client.
+
+Implemented behavior:
+
+- Backend now exposes `POST /cabinet/app-session`.
+- Android posts:
+  - `device_fingerprint` from local `device_id`
+  - `xray_uuid` from the last successful provisioning
+- Backend validates:
+  - device exists
+  - `xray_uuid` matches the device row
+  - effective entitlement is paid
+  - device is not a regular family member
+- Backend then creates a regular `cabinet_sessions` row and returns the session token/cookie.
+- Android stores the session token and uses it as the `cabinet_session` cookie for existing `/cabinet/api/*` calls.
+
+Email one-time-code login remains as a fallback:
+
+- backend endpoint unavailable
+- device identity stale or rejected
+- local paid state missing
+- recovery/manual access case
+
+If a stored cabinet session expires, Android clears it and retries trusted-device access before showing the email login form.
+
+### Files touched
+
+Android:
+
+- `V2rayNG/app/src/main/java/com/v2ray/ang/ui/CabinetActivity.kt`
+- `V2rayNG/app/src/main/res/layout/activity_cabinet.xml`
+- `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`
+- `V2rayNG/app/src/main/AndroidManifest.xml`
+- `V2rayNG/app/src/main/res/values/strings.xml`
+
+Backend:
+
+- `client-backend/src/routes/cabinet.js`
+
+Validation:
+
+- Android compile: `./gradlew :app:compilePlaystoreDebugKotlin` passed.
+- Android compile: `./gradlew :app:compileFdroidDebugKotlin` passed.
+- Backend syntax check: `node --check client-backend/src/routes/cabinet.js` passed.
+
+Next sensible steps:
+
+- Test the cabinet happy path on a real paid owner device after backend deploy.
+- Test expired-session behavior: saved `cabinet_session` should retry app-session before email.
+- Test rejection behavior for regular family members: drawer should remain hidden, and backend should reject direct app-session attempts.
+- Consider adding a backend regression test for `/cabinet/app-session` once the backend test harness has route-level coverage for cabinet sessions.
+
 ### Native Android payment flow — current state
 
 Completed in this session:

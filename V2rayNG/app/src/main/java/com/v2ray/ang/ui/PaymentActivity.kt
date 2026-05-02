@@ -353,15 +353,16 @@ class PaymentActivity : BaseActivity() {
     }
 
     private fun showConfirmedState() {
-        updateHeader(R.string.vsm_payment_success_title, R.string.vsm_payment_success_body)
+        updateHeader(R.string.vsm_payment_success_title, R.string.vsm_payment_success_intro)
         binding.layoutPaymentCard.visibility = View.GONE
         binding.layoutPaymentProcessing.visibility = View.VISIBLE
+        binding.tvPaymentStatus.visibility = View.GONE
         binding.pbPaymentPolling.visibility = View.GONE
         setOpenCheckoutVisibility(false)
         binding.btnPaymentDone.visibility = View.VISIBLE
-        binding.tvPaymentProcessingTitle.text = getString(R.string.vsm_payment_success)
-        binding.tvPaymentProcessingBody.text = getString(R.string.vsm_payment_success_body)
-        showStatus(getString(R.string.vsm_payment_success), StatusMode.SUCCESS)
+        binding.tvPaymentProcessingTitle.text = getString(R.string.vsm_payment_success_card_title)
+        binding.tvPaymentProcessingBody.text = getString(R.string.vsm_payment_success_card_body)
+        binding.tvPaymentId.visibility = View.GONE
     }
 
     private fun showFailedState() {

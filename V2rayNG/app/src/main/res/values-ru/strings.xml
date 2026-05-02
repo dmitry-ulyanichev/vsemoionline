@@ -461,7 +461,10 @@
     <string name="vsm_payment_unavailable">Оплата временно недоступна. Попробуйте чуть позже.</string>
     <string name="vsm_payment_waiting_confirmation">Платёж создан. Завершите оплату у провайдера, мы проверим подтверждение автоматически.</string>
     <string name="vsm_payment_success_title">Оплата подтверждена</string>
+    <string name="vsm_payment_success_intro">Подписка обновляется на этом устройстве.</string>
     <string name="vsm_payment_success">Оплата подтверждена. Подписка обновляется на этом устройстве.</string>
+    <string name="vsm_payment_success_card_title">Готово</string>
+    <string name="vsm_payment_success_card_body">Вернитесь на главный экран, чтобы продолжить.</string>
     <string name="vsm_payment_success_body">Мы получили подтверждение от провайдера. Вернитесь на главный экран, и приложение обновит конфигурацию подписки.</string>
     <string name="vsm_payment_failed">Провайдер сообщил об ошибке оплаты. Попробуйте другой способ.</string>
     <string name="vsm_payment_failed_title">Оплата не прошла</string>

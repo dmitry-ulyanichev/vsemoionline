@@ -126,6 +126,10 @@
             android:name=".ui.PaymentActivity"
             android:exported="false"
             android:theme="@style/AppThemeDayNight.NoActionBar" />
+        <activity
+            android:name=".ui.CabinetActivity"
+            android:exported="false"
+            android:theme="@style/AppThemeDayNight.NoActionBar" />
 
         <activity
             android:name=".ui.SubEditActivity"

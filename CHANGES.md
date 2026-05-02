@@ -2,6 +2,67 @@
 
 ---
 
+## Updates (2026-05-02) — Native Android cabinet and trusted-device cabinet session
+
+### Android: native cabinet screen
+**Files**: `V2rayNG/app/src/main/java/com/v2ray/ang/ui/CabinetActivity.kt`, `V2rayNG/app/src/main/res/layout/activity_cabinet.xml`, `V2rayNG/app/src/main/AndroidManifest.xml`, `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`, `V2rayNG/app/src/main/res/values/strings.xml`
+
+Added `CabinetActivity` as the in-app owner cabinet entry point for paid users.
+
+The screen now covers the core cabinet operations that were previously only available through the backend-rendered `/cabinet` web page:
+- account/family summary
+- member list
+- add member by display name and optional email
+- edit member display name
+- allocate one day to a member
+- distribute days evenly
+- reissue member activation codes
+- copy or open activation links
+- remove non-owner members
+- refresh cabinet data
+- renew through the native `PaymentActivity`
+- logout from the locally stored cabinet session
+
+`MainActivity.openCabinetUrl()` now launches `CabinetActivity` instead of opening the browser. When cabinet operations mutate subscription/family state, `CabinetActivity` finishes with `RESULT_OK`, allowing the main screen to refresh provisioning/status.
+
+### Backend: app-authenticated cabinet session
+**Files**: `client-backend/src/routes/cabinet.js`
+
+Added `POST /cabinet/app-session` for the Android client.
+
+The endpoint accepts:
+- `device_fingerprint`
+- `xray_uuid`
+
+It verifies:
+- the device exists
+- the supplied `xray_uuid` matches the device row
+- the device has an effective paid entitlement
+- the device is not a regular family member (`family_member_role !== "member"`)
+
+If valid, the backend creates a normal `cabinet_sessions` row, sets the same `cabinet_session` cookie used by the web cabinet, and returns `session_token`, `expires_at`, optional `email`, and `cabinet_url`.
+
+This keeps the existing `/cabinet/api/*` authorization model intact while removing redundant email-code authorization for a paid Android device that the backend has already recognized.
+
+### Android: email login kept as fallback
+**Files**: `CabinetActivity.kt`, `strings.xml`
+
+On launch, `CabinetActivity` now tries trusted-device login first when local prefs show:
+- `plan == "paid"`
+- stored `device_id`
+- stored `xray_uuid`
+
+If the app-session endpoint is unavailable or rejects the device, the screen falls back to the previous email one-time-code flow. This preserves compatibility with older backend deployments and still gives users a recovery path if local device identity is stale.
+
+If a stored `cabinet_session` later expires, the activity clears it and retries trusted-device login before asking for email.
+
+### Validation
+- Android: `./gradlew :app:compilePlaystoreDebugKotlin` — passed
+- Android: `./gradlew :app:compileFdroidDebugKotlin` — passed
+- Backend: `node --check client-backend/src/routes/cabinet.js` — passed
+
+---
+
 ## Updates (2026-05-02) — Native Android payment flow and restore handoff
 
 ### Android: native payment screen

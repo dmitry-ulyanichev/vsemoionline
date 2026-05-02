@@ -177,6 +177,11 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
             refreshProvisionAfterRestore()
         }
     }
+    private val cabinetActivity = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (it.resultCode == Activity.RESULT_OK) {
+            refreshProvisionAfterRestore()
+        }
+    }
     private val tabGroupListener = object : TabLayout.OnTabSelectedListener {
         override fun onTabSelected(tab: TabLayout.Tab?) {
             val selectId = tab?.tag.toString()
@@ -1685,11 +1690,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     }
 
     private fun openCabinetUrl() {
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        val url = prefs.getString(PREF_CABINET_URL, null)
-            ?: prefs.getString(PREF_BACKEND_BASE_URL, null)?.let { "${it.removeSuffix("/")}/cabinet" }
-            ?: return
-        openThemedUrl(url)
+        cabinetActivity.launch(Intent(this, CabinetActivity::class.java))
     }
 
     private fun openPaymentUrl() {

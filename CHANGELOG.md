@@ -7,6 +7,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Android + Backend: native cabinet screen with trusted-device access**
+  - Added a native Android `CabinetActivity` that replaces the paid user's browser handoff for owner cabinet access
+  - The drawer `Личный кабинет` item now opens the in-app cabinet screen and returns `RESULT_OK` after cabinet mutations so the main screen can refresh provisioning/status
+  - Cabinet opens automatically for recognized paid owner devices by posting the stored `device_fingerprint` and `xray_uuid` to backend `POST /cabinet/app-session`
+  - Backend verifies that the device exists, matches the supplied `xray_uuid`, has an effective paid entitlement, and is not a regular family member before minting a normal `cabinet_session`
+  - Email one-time-code login remains available as a fallback for unsupported backend versions, expired/invalid device identity, or recovery cases
+  - Native cabinet supports account summary, member list, add/edit/remove member, allocate one day, distribute days evenly, reissue activation codes, copy/open activation links, refresh, renew via native payment, and logout
+  - Added `activity_cabinet.xml`, cabinet strings/plurals, manifest registration, and backend `/cabinet/app-session`
+
 - **Android + Backend: native payment flow with restore handoff**
   - Added a native Android payment screen that loads backend payment config, shows available plans and payment methods, and creates `/payment/create` intents without sending users to the website form
   - The 3-month plan is preselected as the default when available
