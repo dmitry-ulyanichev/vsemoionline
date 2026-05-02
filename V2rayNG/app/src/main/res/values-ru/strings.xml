@@ -139,7 +139,7 @@
     <string name="msg_downloading_content">Загрузка данных</string>
     <string name="menu_item_export_proxy_app">Экспорт в буфер обмена</string>
     <string name="menu_item_import_proxy_app">Импорт из буфера обмена</string>
-    <string name="per_app_proxy_settings">Настройки приложений</string>
+    <string name="per_app_proxy_settings">Белый список</string>
     <string name="per_app_proxy_settings_enable">Использовать выбор приложений</string>
 
     <!-- Preferences -->
@@ -443,16 +443,18 @@
     <string name="vsm_restore_resend_code">Отправить код ещё раз</string>
     <string name="vsm_payment_title">Оплатить подписку</string>
     <string name="vsm_payment_eyebrow">Безопасная оплата</string>
-    <string name="vsm_payment_intro">Выберите срок, способ оплаты и email для восстановления доступа. Реквизиты вводятся только на стороне платёжного провайдера.</string>
+    <string name="vsm_payment_intro">Выберите срок, способ оплаты и email для восстановления доступа. Платёжные реквизиты вводятся только на стороне платёжного провайдера.</string>
     <string name="vsm_payment_plan_label">Срок подписки</string>
     <string name="vsm_payment_method_label">Способ оплаты</string>
     <string name="vsm_payment_create">Перейти к оплате</string>
-    <string name="vsm_payment_open_checkout">Открыть оплату ещё раз</string>
+    <string name="vsm_payment_open_checkout_hint">Страница оплаты не открылась?</string>
+    <string name="vsm_payment_open_checkout">Попробовать ещё раз</string>
     <string name="vsm_payment_restore_existing_email">Восстановить подписку</string>
     <string name="vsm_payment_done">Вернуться на главный экран</string>
-    <string name="vsm_payment_processing_title">Платёж обрабатывается</string>
-    <string name="vsm_payment_processing_intro">Мы проверяем статус автоматически и обновим экран, когда платёж будет подтверждён.</string>
-    <string name="vsm_payment_processing_body">Завершите оплату в открывшемся окне на сайте платёжной системы. Эта страница сама обновится, когда платёж будет подтверждён.</string>
+    <string name="vsm_payment_processing_title">Платёж создан</string>
+    <string name="vsm_payment_processing_intro">Завершите оплату на странице платёжной системы.</string>
+    <string name="vsm_payment_processing_card_title">Проверяем статус</string>
+    <string name="vsm_payment_processing_body">Экран обновится автоматически после подтверждения платежа.</string>
     <string name="vsm_payment_id_label">Платёж #%1$s</string>
     <string name="vsm_payment_footer">После создания платежа приложение откроет защищённую страницу провайдера и будет проверять подтверждение в фоне.</string>
     <string name="vsm_payment_member_warning">До сих пор за вас платил другой пользователь. После оплаты вы станете самостоятельным пользователем и сможете управлять подпиской отдельно.</string>

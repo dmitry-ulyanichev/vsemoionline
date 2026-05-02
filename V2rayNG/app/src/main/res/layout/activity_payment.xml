@@ -3,13 +3,14 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/vsm_surface2"
+    android:background="@color/vsm_toolbar"
     android:fitsSystemWindows="true"
     android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:background="@color/vsm_surface2"
         android:orientation="vertical"
         android:paddingBottom="32dp">
 
@@ -262,11 +263,21 @@
                     android:indeterminate="true"
                     app:indicatorColor="@color/vsm_mint" />
 
+                <TextView
+                    android:id="@+id/tvPaymentOpenCheckoutHint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:text="@string/vsm_payment_open_checkout_hint"
+                    android:textColor="@color/vsm_restore_card_hint"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+
                 <Button
                     android:id="@+id/btnPaymentOpenCheckout"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="18dp"
+                    android:layout_marginTop="8dp"
                     android:backgroundTint="@color/vsm_restore_card_body"
                     android:minHeight="48dp"
                     android:paddingTop="14dp"

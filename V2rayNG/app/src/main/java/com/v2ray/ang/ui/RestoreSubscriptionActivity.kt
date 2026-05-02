@@ -34,6 +34,7 @@ class RestoreSubscriptionActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
+        configureVseMoiSystemBars()
 
         title = getString(R.string.vsm_toolbar_title)
         setSupportActionBar(binding.toolbar)

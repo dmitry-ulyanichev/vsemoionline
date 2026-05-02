@@ -992,12 +992,13 @@
 
     <com.google.android.material.navigation.NavigationView
         android:id="@+id/nav_view"
-        android:layout_width="wrap_content"
+        android:layout_width="@dimen/vsm_nav_drawer_width"
         android:layout_height="match_parent"
         android:layout_gravity="start"
         android:background="@color/vsm_surface"
         app:headerLayout="@layout/nav_header"
         app:itemIconTint="@color/vsm_link"
+        app:itemMaxLines="2"
         app:itemTextColor="?android:textColorPrimary"
         app:menu="@menu/menu_drawer" />
 

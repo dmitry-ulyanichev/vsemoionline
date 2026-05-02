@@ -35,7 +35,6 @@ import androidx.appcompat.app.ActionBarDrawerToggle
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
-import androidx.core.view.WindowCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
@@ -267,7 +266,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         setContentView(binding.root)
         title = getString(R.string.vsm_toolbar_title)
         setSupportActionBar(binding.toolbar)
-        configureSystemBars()
+        configureVseMoiSystemBars()
 
         val fabClickListener = View.OnClickListener {
             if (mainViewModel.isRunning.value == true) {
@@ -350,22 +349,6 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         handleMagicLink(intent)
 
         applyAnimatedBackgrounds()
-    }
-
-    private fun configureSystemBars() {
-        val isNight = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        val statusBarColor = ContextCompat.getColor(this, R.color.vsm_toolbar)
-        val navigationBarColor = ContextCompat.getColor(
-            this,
-            if (isNight) android.R.color.black else R.color.vsm_surface
-        )
-
-        window.statusBarColor = statusBarColor
-        window.navigationBarColor = navigationBarColor
-        WindowCompat.getInsetsController(window, window.decorView)?.apply {
-            isAppearanceLightStatusBars = false
-            isAppearanceLightNavigationBars = !isNight
-        }
     }
 
     override fun onNewIntent(intent: Intent) {

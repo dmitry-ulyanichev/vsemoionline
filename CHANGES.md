@@ -268,6 +268,32 @@ Card descriptions are static editorial copy in `CARD_META` (keyed by `main`/`old
 
 ---
 
+## Updates (2026-05-02) — Android payment/restore status-bar contrast
+
+### Android: transparent status-bar inset handling for branded secondary screens
+**Files**: `V2rayNG/app/src/main/java/com/v2ray/ang/ui/BaseActivity.kt`, `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`, `V2rayNG/app/src/main/java/com/v2ray/ang/ui/PaymentActivity.kt`, `V2rayNG/app/src/main/java/com/v2ray/ang/ui/RestoreSubscriptionActivity.kt`, `V2rayNG/app/src/main/res/layout/activity_payment.xml`, `V2rayNG/app/src/main/res/layout/activity_restore_subscription.xml`
+
+**Problem**:
+- In light theme, payment and subscription-restoration screens showed a light/low-contrast system status bar while the main screen looked correct.
+- The earlier main-screen fix set explicit system-bar colors and icon appearance, but payment/restore still had `fitsSystemWindows` root `ScrollView`s with a light `vsm_surface2` background.
+- With target SDK 36, Android can treat the status bar as transparent; the root view then draws behind the status-bar inset, so `window.statusBarColor` alone is not sufficient.
+
+**Changes**:
+- Moved the main-screen system-bar logic into `BaseActivity.configureVseMoiSystemBars()`.
+- `MainActivity`, `PaymentActivity`, and `RestoreSubscriptionActivity` now call the shared helper.
+- `activity_payment.xml` and `activity_restore_subscription.xml` now use `@color/vsm_toolbar` on the `fitsSystemWindows` root so the transparent status-bar inset is dark.
+- Their inner content `LinearLayout`s keep `@color/vsm_surface2`, preserving the normal page background below the toolbar.
+
+**Guidance for cabinet screen work**:
+- If a new branded screen uses a dark toolbar/header and a `fitsSystemWindows` root, set the inset-owning root background to `@color/vsm_toolbar`.
+- Put the light/dark page surface color on an inner content container instead.
+- Also call `configureVseMoiSystemBars()` from the activity after `setContentView(...)`.
+
+**Validation**:
+- `./gradlew :app:compilePlaystoreDebugKotlin` passed.
+
+---
+
 ## Updates (2026-04-18) — Android main-screen polish, recovery localization, and connect-flow cleanup
 
 ### Android: system bars and drawer navigation aligned with VseMoiOnline UI

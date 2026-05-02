@@ -73,8 +73,9 @@ class PaymentActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
+        configureVseMoiSystemBars()
 
-        title = getString(R.string.vsm_payment_title)
+        title = getString(R.string.vsm_toolbar_title)
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.setDisplayShowHomeEnabled(true)
@@ -154,7 +155,7 @@ class PaymentActivity : BaseActivity() {
     }
 
     private fun updateHeader(titleRes: Int, introRes: Int) {
-        title = getString(titleRes)
+        title = getString(R.string.vsm_toolbar_title)
         binding.tvPaymentTitle.setText(titleRes)
         binding.tvPaymentIntro.setText(introRes)
     }
@@ -331,7 +332,7 @@ class PaymentActivity : BaseActivity() {
         binding.layoutPaymentCard.visibility = View.VISIBLE
         showStatus(message, StatusMode.INFO)
         binding.btnPaymentRestore.visibility = View.VISIBLE
-        binding.btnPaymentOpenCheckout.visibility = View.GONE
+        setOpenCheckoutVisibility(false)
         binding.btnPaymentDone.visibility = View.GONE
     }
 
@@ -339,16 +340,16 @@ class PaymentActivity : BaseActivity() {
         updateHeader(R.string.vsm_payment_processing_title, R.string.vsm_payment_processing_intro)
         binding.layoutPaymentCard.visibility = View.GONE
         binding.layoutPaymentProcessing.visibility = View.VISIBLE
+        binding.tvPaymentStatus.visibility = View.GONE
         binding.btnPaymentRestore.visibility = View.GONE
-        binding.btnPaymentOpenCheckout.visibility = if (redirectUrl != null) View.VISIBLE else View.GONE
+        setOpenCheckoutVisibility(redirectUrl != null)
         binding.btnPaymentOpenCheckout.tag = redirectUrl
         binding.btnPaymentDone.visibility = View.GONE
         binding.pbPaymentPolling.visibility = View.VISIBLE
-        binding.tvPaymentProcessingTitle.text = getString(R.string.vsm_payment_processing_title)
+        binding.tvPaymentProcessingTitle.text = getString(R.string.vsm_payment_processing_card_title)
         binding.tvPaymentProcessingBody.text = getString(R.string.vsm_payment_processing_body)
         binding.tvPaymentId.visibility = if (paymentId.isNotBlank()) View.VISIBLE else View.GONE
         binding.tvPaymentId.text = if (paymentId.isNotBlank()) getString(R.string.vsm_payment_id_label, paymentId) else ""
-        showStatus(getString(R.string.vsm_payment_waiting_confirmation), StatusMode.INFO)
     }
 
     private fun showConfirmedState() {
@@ -356,7 +357,7 @@ class PaymentActivity : BaseActivity() {
         binding.layoutPaymentCard.visibility = View.GONE
         binding.layoutPaymentProcessing.visibility = View.VISIBLE
         binding.pbPaymentPolling.visibility = View.GONE
-        binding.btnPaymentOpenCheckout.visibility = View.GONE
+        setOpenCheckoutVisibility(false)
         binding.btnPaymentDone.visibility = View.VISIBLE
         binding.tvPaymentProcessingTitle.text = getString(R.string.vsm_payment_success)
         binding.tvPaymentProcessingBody.text = getString(R.string.vsm_payment_success_body)
@@ -368,7 +369,7 @@ class PaymentActivity : BaseActivity() {
         binding.layoutPaymentCard.visibility = View.GONE
         binding.layoutPaymentProcessing.visibility = View.VISIBLE
         binding.pbPaymentPolling.visibility = View.GONE
-        binding.btnPaymentOpenCheckout.visibility = View.GONE
+        setOpenCheckoutVisibility(false)
         binding.btnPaymentDone.visibility = View.GONE
         binding.tvPaymentProcessingTitle.text = getString(R.string.vsm_payment_failed_title)
         binding.tvPaymentProcessingBody.text = getString(R.string.vsm_payment_failed_body)
@@ -383,6 +384,12 @@ class PaymentActivity : BaseActivity() {
             }
         }
         restoreSubscriptionActivity.launch(intent)
+    }
+
+    private fun setOpenCheckoutVisibility(isVisible: Boolean) {
+        val visibility = if (isVisible) View.VISIBLE else View.GONE
+        binding.tvPaymentOpenCheckoutHint.visibility = visibility
+        binding.btnPaymentOpenCheckout.visibility = visibility
     }
 
     private fun openCheckoutAgain() {
@@ -409,7 +416,7 @@ class PaymentActivity : BaseActivity() {
                                 statusJob?.cancel()
                                 showFailedState()
                             }
-                            else -> showStatus(getString(R.string.vsm_payment_waiting_confirmation), StatusMode.INFO)
+                            else -> Unit
                         }
                     }
                     if (status == "confirmed" || status == "failed") return@launch

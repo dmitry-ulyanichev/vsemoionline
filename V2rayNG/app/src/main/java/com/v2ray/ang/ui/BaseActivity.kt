@@ -1,12 +1,15 @@
 package com.v2ray.ang.ui
 
 import android.content.Context
+import android.content.res.Configuration
 import android.os.Bundle
 import android.view.MenuItem
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.RecyclerView
+import com.v2ray.ang.R
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.helper.CustomDividerItemDecoration
 import com.v2ray.ang.util.MyContextWrapper
@@ -31,6 +34,22 @@ abstract class BaseActivity : AppCompatActivity() {
 
     override fun attachBaseContext(newBase: Context?) {
         super.attachBaseContext(MyContextWrapper.wrap(newBase ?: return, SettingsManager.getLocale()))
+    }
+
+    protected fun configureVseMoiSystemBars() {
+        val isNight = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val statusBarColor = ContextCompat.getColor(this, R.color.vsm_toolbar)
+        val navigationBarColor = ContextCompat.getColor(
+            this,
+            if (isNight) android.R.color.black else R.color.vsm_surface
+        )
+
+        window.statusBarColor = statusBarColor
+        window.navigationBarColor = navigationBarColor
+        WindowCompat.getInsetsController(window, window.decorView)?.apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = !isNight
+        }
     }
 
     /**

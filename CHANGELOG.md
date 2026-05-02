@@ -74,6 +74,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Base string resources updated so the drawer and restore-subscription flow show Russian copy on the current build path
 
 ### Fixed
+- **Android: payment/restore status bar contrast in light theme**
+  - Payment and subscription-restoration screens now reuse the VseMoiOnline system-bar helper from the main screen
+  - Because the app targets Android SDK 36 and system bars can be transparent, these screens also give their `fitsSystemWindows` root a dark `vsm_toolbar` background and keep the inner content container on `vsm_surface2`
+  - Important for future cabinet screens: setting `window.statusBarColor` alone is not enough when the root view draws behind the transparent status-bar inset; the inset-owning root must draw the intended status-bar color too
+
 - **Android: FAB tap target, connecting-label flicker, and stale VPN service control hardened**
   - The visible FAB halo container now shares the power-button click listener, increasing the effective tap target beyond the inner icon button
   - Connect attempts now show `Подключение…` immediately and ignore repeated connect taps until success, failure, or VPN-permission cancellation

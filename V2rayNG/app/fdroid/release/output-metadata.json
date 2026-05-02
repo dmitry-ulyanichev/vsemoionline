@@ -33,19 +33,6 @@
       "filters": [
         {
           "filterType": "ABI",
-          "value": "arm64-v8a"
-        }
-      ],
-      "attributes": [],
-      "versionCode": 5068401,
-      "versionName": "1.10.33",
-      "outputFile": "v2rayNG_1.10.33-fdroid_arm64-v8a.apk"
-    },
-    {
-      "type": "ONE_OF_MANY",
-      "filters": [
-        {
-          "filterType": "ABI",
           "value": "x86_64"
         }
       ],
@@ -53,6 +40,19 @@
       "versionCode": 5068403,
       "versionName": "1.10.33",
       "outputFile": "v2rayNG_1.10.33-fdroid_x86_64.apk"
+    },
+    {
+      "type": "ONE_OF_MANY",
+      "filters": [
+        {
+          "filterType": "ABI",
+          "value": "arm64-v8a"
+        }
+      ],
+      "attributes": [],
+      "versionCode": 5068401,
+      "versionName": "1.10.33",
+      "outputFile": "v2rayNG_1.10.33-fdroid_arm64-v8a.apk"
     },
     {
       "type": "ONE_OF_MANY",
@@ -76,8 +76,8 @@
       "baselineProfiles": [
         "baselineProfiles/1/v2rayNG_1.10.33-fdroid_universal.dm",
         "baselineProfiles/1/v2rayNG_1.10.33-fdroid_armeabi-v7a.dm",
-        "baselineProfiles/1/v2rayNG_1.10.33-fdroid_arm64-v8a.dm",
         "baselineProfiles/1/v2rayNG_1.10.33-fdroid_x86_64.dm",
+        "baselineProfiles/1/v2rayNG_1.10.33-fdroid_arm64-v8a.dm",
         "baselineProfiles/1/v2rayNG_1.10.33-fdroid_x86.dm"
       ]
     },
@@ -87,8 +87,8 @@
       "baselineProfiles": [
         "baselineProfiles/0/v2rayNG_1.10.33-fdroid_universal.dm",
         "baselineProfiles/0/v2rayNG_1.10.33-fdroid_armeabi-v7a.dm",
-        "baselineProfiles/0/v2rayNG_1.10.33-fdroid_arm64-v8a.dm",
         "baselineProfiles/0/v2rayNG_1.10.33-fdroid_x86_64.dm",
+        "baselineProfiles/0/v2rayNG_1.10.33-fdroid_arm64-v8a.dm",
         "baselineProfiles/0/v2rayNG_1.10.33-fdroid_x86.dm"
       ]
     }
