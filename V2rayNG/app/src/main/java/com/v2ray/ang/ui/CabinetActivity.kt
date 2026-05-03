@@ -5,12 +5,18 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Typeface
 import android.os.Bundle
+import android.text.TextUtils
 import android.text.InputType
 import android.util.Log
+import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
@@ -69,6 +75,7 @@ class CabinetActivity : BaseActivity() {
         private const val PREF_PLAN = "plan"
         private const val PREF_XRAY_UUID = "xray_uuid"
         private const val PRIMARY_PROVISION_URL = "https://vmonl.store/provision"
+        private const val ANDROID_DOWNLOAD_PATH = "/download/android"
         private const val CABINET_SESSION_COOKIE_NAME = "cabinet_session"
         private const val CABINET_CODE_LENGTH = 6
     }
@@ -102,7 +109,12 @@ class CabinetActivity : BaseActivity() {
         binding.btnCabinetRenew.setOnClickListener {
             paymentActivity.launch(Intent(this, PaymentActivity::class.java))
         }
-        binding.btnCabinetAddMember.setOnClickListener { showAddMemberDialog() }
+        binding.btnCabinetAddMember.setOnClickListener {
+            addMember(
+                displayName = binding.etCabinetMemberName.text?.toString()?.trim().orEmpty(),
+                email = binding.etCabinetMemberEmail.text?.toString()?.trim()?.lowercase().orEmpty(),
+            )
+        }
         binding.btnCabinetDistribute.setOnClickListener { distributeEvenly() }
         binding.btnCabinetLogout.setOnClickListener {
             clearCabinetSession()
@@ -178,6 +190,8 @@ class CabinetActivity : BaseActivity() {
         return "${url.protocol}://${url.host}$port"
     }
 
+    private fun androidDownloadUrl(): String = "${backendOrigin()}$ANDROID_DOWNLOAD_PATH"
+
     private fun cabinetSessionToken(): String? {
         return getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .getString(PREF_CABINET_SESSION_TOKEN, null)
@@ -219,6 +233,8 @@ class CabinetActivity : BaseActivity() {
         binding.btnCabinetLogout.isEnabled = !isBusy
         binding.etCabinetEmail.isEnabled = !isBusy
         binding.etCabinetCode.isEnabled = !isBusy
+        binding.etCabinetMemberName.isEnabled = !isBusy
+        binding.etCabinetMemberEmail.isEnabled = !isBusy
     }
 
     private fun showStatus(message: String, mode: StatusMode = StatusMode.INFO) {
@@ -382,11 +398,14 @@ class CabinetActivity : BaseActivity() {
                 val family = getJson("/cabinet/api/family").json
                 val summary = family.optJSONObject("family")
                 val loadedMembers = parseMembers(family)
+                val lastPaymentDate = runCatching {
+                    parseLatestPaymentDate(getJson("/cabinet/api/history?filter=payment&limit=1").json)
+                }.getOrNull()
                 withContext(Dispatchers.Main) {
                     setBusy(false)
                     members = loadedMembers
                     attemptedTrustedDeviceSession = false
-                    renderCabinet(summary)
+                    renderCabinet(summary, lastPaymentDate)
                     showContentState()
                     binding.tvCabinetStatus.visibility = View.GONE
                 }
@@ -431,27 +450,35 @@ class CabinetActivity : BaseActivity() {
         return result
     }
 
-    private fun renderCabinet(summary: JSONObject?) {
-        val email = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-            .getString(PREF_CABINET_EMAIL, null)
-            .orEmpty()
+    private fun parseLatestPaymentDate(history: JSONObject): String? {
+        return history.optJSONArray("items")
+            ?.optJSONObject(0)
+            ?.optString("date_label")
+            ?.takeIf { it.isNotBlank() }
+    }
+
+    private fun renderCabinet(summary: JSONObject?, lastPaymentDate: String?) {
         val owner = members.firstOrNull { it.role == "owner" }
         val depositDays = summary?.optDouble("paid_days_balance", 0.0)?.toInt() ?: 0
-        val activeMembers = summary?.optInt("active_member_count", members.size) ?: members.size
-        val policy = when (summary?.optString("allocation_policy")) {
-            "auto_distribute_evenly" -> getString(R.string.vsm_cabinet_policy_auto)
-            else -> getString(R.string.vsm_cabinet_policy_manual)
-        }
+        val ownerDays = owner?.daysRemaining ?: 0
+        val isSingleMember = members.size <= 1
 
-        binding.tvCabinetAccount.text = email.ifBlank { getString(R.string.vsm_cabinet_title) }
-        binding.tvCabinetSummary.text = getString(
-            R.string.vsm_cabinet_summary_format,
-            owner?.daysRemaining ?: 0,
-            activeMembers,
-            depositDays,
-            policy,
+        binding.layoutCabinetDaysHero.visibility = if (isSingleMember) View.VISIBLE else View.GONE
+        (binding.layoutCabinetSubscriptionStats.layoutParams as? LinearLayout.LayoutParams)?.let {
+            it.topMargin = if (isSingleMember) dp(22) else dp(14)
+            binding.layoutCabinetSubscriptionStats.layoutParams = it
+        }
+        binding.tvCabinetDaysLeft.text = ownerDays.toString()
+        binding.tvCabinetStatusBadge.setText(
+            if (ownerDays > 0) R.string.vsm_cabinet_status_active else R.string.vsm_cabinet_status_inactive
         )
-        binding.btnCabinetDistribute.visibility = if (members.size > 1) View.VISIBLE else View.GONE
+        binding.tvCabinetStatusBadge.setTextColor(
+            getColor(if (ownerDays > 0) R.color.vsm_sub_ok else R.color.vsm_sub_urgent)
+        )
+        binding.tvCabinetLastPayment.text = lastPaymentDate ?: getString(R.string.vsm_cabinet_no_payment_date)
+        binding.tvCabinetDepositTitle.text = getString(R.string.vsm_cabinet_distribution_title_format, depositDays)
+        binding.layoutCabinetDistribution.visibility = if (members.size > 1 && depositDays > 0) View.VISIBLE else View.GONE
+        binding.btnCabinetDistribute.visibility = if (members.size > 1 && depositDays > 0) View.VISIBLE else View.GONE
 
         binding.llCabinetMembers.removeAllViews()
         members.forEach { member ->
@@ -460,126 +487,354 @@ class CabinetActivity : BaseActivity() {
     }
 
     private fun buildMemberView(member: CabinetMember): View {
-        val card = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundResource(R.drawable.restore_status_info_bg)
-            setPadding(dp(14), dp(14), dp(14), dp(14))
+        val isOwner = member.role == "owner"
+        val wrapper = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = if (isOwner) dp(14) else dp(12)
+            }
+        }
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundResource(R.drawable.restore_card_bg)
+            setPadding(dp(20), if (isOwner) dp(28) else dp(20), dp(20), dp(20))
+            layoutParams = FrameLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                if (isOwner) topMargin = dp(10)
+            }
+        }
+
+        if (isOwner) {
+            wrapper.addView(TextView(this).apply {
+                text = getString(R.string.vsm_cabinet_owner_badge)
+                setTextColor(getColor(R.color.vsm_link))
+                textSize = 14f
+                typeface = Typeface.DEFAULT_BOLD
+                isAllCaps = true
+                setBackgroundResource(R.drawable.cabinet_owner_badge_bg)
+                setPadding(dp(18), dp(4), dp(18), dp(4))
+                layoutParams = FrameLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    leftMargin = dp(18)
+                    gravity = Gravity.TOP or Gravity.LEFT
+                }
+            })
+        }
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val nameRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                rightMargin = dp(10)
+            }
+        }
+
+        nameRow.addView(TextView(this).apply {
+            text = member.displayName.ifBlank { getString(R.string.vsm_cabinet_member_fallback) }
+            setTextColor(getColor(R.color.vsm_restore_card_title))
+            textSize = 18f
+            typeface = Typeface.DEFAULT_BOLD
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                rightMargin = dp(10)
+            }
+        })
+        nameRow.addView(buildIconButton(R.drawable.ic_edit_24dp, getString(R.string.vsm_cabinet_edit_name)) {
+            showEditMemberDialog(member)
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(dp(42), dp(42))
+        })
+        header.addView(nameRow)
+        header.addView(buildMemberControls(member))
+        card.addView(header)
+
+        val status = when {
+            member.activationRaw != null -> getString(R.string.vsm_cabinet_waiting_activation)
+            else -> getString(R.string.vsm_cabinet_device_bound)
+        }
+        card.addView(TextView(this).apply {
+            text = status
+            setTextColor(getColor(R.color.vsm_restore_card_body))
+            textSize = 16f
+            setPadding(0, dp(16), 0, 0)
+        })
+
+        addActivationViews(card, member)
+
+        if (!isOwner) {
+            card.addView(buildDangerButton(R.string.vsm_cabinet_remove_member) { confirmRemoveMember(member) }.apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    topMargin = dp(12)
+                    gravity = Gravity.RIGHT
+                }
+            })
+        }
+
+        wrapper.addView(card)
+        if (isOwner) {
+            wrapper.getChildAt(0)?.bringToFront()
+        }
+        return wrapper
+    }
+
+    private fun addActivationViews(card: LinearLayout, member: CabinetMember) {
+        val activationBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundResource(R.drawable.cabinet_inner_card_bg)
+            setPadding(dp(20), dp(18), dp(20), dp(18))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = dp(28)
+            }
+        }
+        val hasToken = member.activationCode != null || member.activationRaw != null || member.activationUrl != null
+        if (hasToken) {
+            activationBox.addView(sectionLabel(R.string.vsm_cabinet_install_title))
+            activationBox.addView(TextView(this).apply {
+                setText(R.string.vsm_cabinet_share_download)
+                setTextColor(getColor(R.color.vsm_link))
+                textSize = 16f
+                setPadding(0, dp(14), 0, dp(18))
+                setOnClickListener { copyText(androidDownloadUrl()) }
+            })
+            activationBox.addView(View(this).apply {
+                setBackgroundColor(getColor(R.color.vsm_border))
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    dp(1),
+                ).apply {
+                    bottomMargin = dp(18)
+                }
+            })
+        }
+        activationBox.addView(sectionLabel(R.string.vsm_cabinet_activation_title))
+        activationBox.addView(TextView(this).apply {
+            text = if (member.activationRaw != null || member.activationUrl != null) {
+                getString(R.string.vsm_cabinet_activation_pending_body)
+            } else {
+                getString(R.string.vsm_cabinet_activation_ready_body)
+            }
+            setTextColor(getColor(R.color.vsm_restore_card_body))
+            textSize = 16f
+            setPadding(0, dp(16), 0, 0)
+        })
+        if (member.activationCode != null) {
+            activationBox.addView(buildCodeCopyRow(member.activationCode, member.activationRaw ?: member.activationCode))
+        }
+        if (member.activationUrl != null) {
+            activationBox.addView(buildLinkCopyRow(member.activationUrl))
+        }
+        activationBox.addView(buildOutlineButton(R.string.vsm_cabinet_reissue_code) { reissueActivation(member) })
+        card.addView(activationBox)
+    }
+
+    private fun buildCodeCopyRow(code: String, copyValue: String): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = dp(18)
+            }
+            addView(TextView(this@CabinetActivity).apply {
+                text = code
+                setTextColor(getColor(R.color.vsm_restore_card_title))
+                textSize = 20f
+                typeface = Typeface.DEFAULT_BOLD
+                letterSpacing = 0.12f
+                setBackgroundResource(R.drawable.cabinet_token_bg)
+                setPadding(dp(18), dp(9), dp(18), dp(9))
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    rightMargin = dp(10)
+                }
+            })
+            addView(buildInlineCopyButton { copyText(copyValue) })
+        }
+    }
+
+    private fun buildLinkCopyRow(url: String): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = dp(14)
+            }
+            addView(TextView(this@CabinetActivity).apply {
+                text = url
+                setTextColor(getColor(R.color.vsm_link))
+                textSize = 16f
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.MIDDLE
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    rightMargin = dp(10)
+                }
+                setOnClickListener { Utils.openUri(this@CabinetActivity, url) }
+            })
+            addView(buildInlineCopyButton { copyText(url) })
+        }
+    }
+
+    private fun buildInlineCopyButton(action: () -> Unit): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(6), dp(4), dp(6))
+            setOnClickListener { action() }
+            addView(ImageView(this@CabinetActivity).apply {
+                setImageResource(R.drawable.ic_copy)
+                setColorFilter(getColor(R.color.vsm_restore_card_body))
+                layoutParams = LinearLayout.LayoutParams(dp(16), dp(16)).apply {
+                    rightMargin = dp(6)
+                }
+            })
+            addView(TextView(this@CabinetActivity).apply {
+                setText(R.string.vsm_cabinet_copy_short)
+                setTextColor(getColor(R.color.vsm_restore_card_body))
+                textSize = 14f
+                typeface = Typeface.DEFAULT_BOLD
+            })
+        }
+    }
+
+    private fun sectionLabel(labelRes: Int): TextView {
+        return TextView(this).apply {
+            setText(labelRes)
+            setTextColor(getColor(R.color.vsm_restore_card_body))
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            isAllCaps = true
+            letterSpacing = 0.07f
+        }
+    }
+
+    private fun buildMemberControls(member: CabinetMember): LinearLayout {
+        val canMoveDay = members.any { it.id != member.id } && member.daysRemaining > 0
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
+            addView(buildSymbolButton("-", canMoveDay) { moveDayToFewest(member) })
+            addView(LinearLayout(this@CabinetActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(8), 0, dp(8), 0)
+                layoutParams = LinearLayout.LayoutParams(dp(62), LinearLayout.LayoutParams.WRAP_CONTENT)
+                addView(TextView(this@CabinetActivity).apply {
+                    text = member.daysRemaining.toString()
+                    includeFontPadding = false
+                    setTextColor(getColor(R.color.vsm_sub_ok))
+                    textSize = 36f
+                    typeface = Typeface.DEFAULT_BOLD
+                    gravity = Gravity.CENTER
+                })
+                addView(TextView(this@CabinetActivity).apply {
+                    text = getString(R.string.vsm_cabinet_days_label)
+                    includeFontPadding = false
+                    setTextColor(getColor(R.color.vsm_mint))
+                    textSize = 14f
+                    gravity = Gravity.CENTER
+                })
+            })
+            addView(buildSymbolButton("+", true) { allocateDay(member) })
+        }
+    }
+
+    private fun buildIconButton(iconRes: Int, description: String, action: () -> Unit): ImageButton {
+        return ImageButton(this).apply {
+            setImageResource(iconRes)
+            contentDescription = description
+            background = getDrawable(R.drawable.cabinet_outline_button_bg)
+            backgroundTintList = null
+            setColorFilter(getColor(R.color.vsm_link))
+            scaleType = android.widget.ImageView.ScaleType.CENTER
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            setOnClickListener { action() }
+            layoutParams = LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+                leftMargin = dp(6)
+            }
+        }
+    }
+
+    private fun buildSymbolButton(symbol: String, enabled: Boolean, action: () -> Unit): TextView {
+        return TextView(this).apply {
+            text = symbol
+            gravity = Gravity.CENTER
+            textSize = 24f
+            typeface = Typeface.DEFAULT_BOLD
+            isEnabled = enabled
+            alpha = if (enabled) 1f else 0.45f
+            setTextColor(getColor(R.color.vsm_link))
+            setBackgroundResource(R.drawable.cabinet_outline_button_bg)
+            setOnClickListener { if (enabled) action() }
+            layoutParams = LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+                leftMargin = dp(6)
+            }
+        }
+    }
+
+    private fun buildOutlineButton(labelRes: Int, action: () -> Unit): Button {
+        return Button(this).apply {
+            setText(labelRes)
+            isAllCaps = false
+            minHeight = dp(56)
+            setPadding(dp(18), dp(10), dp(18), dp(10))
+            textSize = 16f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(getColor(R.color.vsm_link))
+            background = getDrawable(R.drawable.cabinet_outline_button_bg)
+            backgroundTintList = null
+            setOnClickListener { action() }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply {
                 topMargin = dp(10)
             }
         }
-
-        val title = TextView(this).apply {
-            text = if (member.role == "owner") {
-                getString(R.string.vsm_cabinet_owner_format, member.displayName)
-            } else {
-                member.displayName
-            }
-            setTextColor(getColor(R.color.vsm_restore_card_title))
-            textSize = 16f
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-        }
-        card.addView(title)
-
-        val subtitleParts = mutableListOf(
-            resources.getQuantityString(R.plurals.vsm_cabinet_days_plural, member.daysRemaining, member.daysRemaining),
-        )
-        member.email?.let { subtitleParts += it }
-        if (member.activationRaw != null) {
-            subtitleParts += getString(R.string.vsm_cabinet_waiting_activation)
-        }
-        card.addView(TextView(this).apply {
-            text = subtitleParts.joinToString(" · ")
-            setTextColor(getColor(R.color.vsm_restore_card_body))
-            textSize = 13f
-            setPadding(0, dp(6), 0, 0)
-        })
-
-        if (member.activationRaw != null || member.activationUrl != null) {
-            addActivationViews(card, member)
-        }
-
-        val actions = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, dp(12), 0, 0)
-        }
-        actions.addView(buildSmallButton(R.string.vsm_cabinet_allocate_day) { allocateDay(member) })
-        actions.addView(buildSmallButton(R.string.vsm_cabinet_reissue_code) { reissueActivation(member) })
-        actions.addView(buildSmallButton(R.string.vsm_cabinet_edit_name) { showEditMemberDialog(member) })
-        if (member.role != "owner") {
-            actions.addView(buildSmallButton(R.string.vsm_cabinet_remove_member) { confirmRemoveMember(member) })
-        }
-        card.addView(actions)
-
-        return card
     }
 
-    private fun addActivationViews(card: LinearLayout, member: CabinetMember) {
-        if (member.activationCode != null) {
-            card.addView(TextView(this).apply {
-                text = getString(R.string.vsm_cabinet_activation_code_format, member.activationCode)
-                setTextColor(getColor(R.color.vsm_restore_card_title))
-                textSize = 14f
-                setTypeface(typeface, android.graphics.Typeface.BOLD)
-                setPadding(0, dp(10), 0, 0)
-            })
-        }
-        val copyText = member.activationRaw ?: member.activationUrl
-        if (copyText != null) {
-            card.addView(buildSmallButton(R.string.vsm_cabinet_copy_activation) { copyText(copyText) })
-        }
-        if (member.activationUrl != null) {
-            card.addView(buildSmallButton(R.string.vsm_cabinet_open_activation) {
-                Utils.openUri(this, member.activationUrl)
-            })
-        }
-    }
-
-    private fun buildSmallButton(labelRes: Int, action: () -> Unit): Button {
+    private fun buildDangerButton(labelRes: Int, action: () -> Unit): Button {
         return Button(this).apply {
             setText(labelRes)
             isAllCaps = false
-            minHeight = dp(42)
-            setPadding(dp(10), dp(8), dp(10), dp(8))
-            setTextColor(getColor(android.R.color.white))
-            backgroundTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.vsm_restore_card_body))
+            minHeight = dp(38)
+            setPadding(dp(14), dp(8), dp(14), dp(8))
+            setTextColor(getColor(R.color.vsm_sub_urgent))
+            background = getDrawable(R.drawable.cabinet_danger_outline_button_bg)
+            backgroundTintList = null
             setOnClickListener { action() }
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply {
-                topMargin = dp(8)
+                topMargin = dp(10)
             }
         }
-    }
-
-    private fun showAddMemberDialog() {
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(4), dp(18), 0)
-        }
-        val nameInput = dialogInput(getString(R.string.vsm_cabinet_name_hint), InputType.TYPE_CLASS_TEXT)
-        val emailInput = dialogInput(
-            getString(R.string.vsm_restore_email_hint),
-            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS,
-        )
-        container.addView(nameInput)
-        container.addView(emailInput)
-
-        AlertDialog.Builder(this)
-            .setTitle(R.string.vsm_cabinet_add_member)
-            .setView(container)
-            .setNegativeButton(android.R.string.cancel, null)
-            .setPositiveButton(R.string.vsm_cabinet_add) { _, _ ->
-                addMember(
-                    displayName = nameInput.text?.toString()?.trim().orEmpty(),
-                    email = emailInput.text?.toString()?.trim()?.lowercase().orEmpty(),
-                )
-            }
-            .show()
     }
 
     private fun showEditMemberDialog(member: CabinetMember) {
@@ -618,6 +873,10 @@ class CabinetActivity : BaseActivity() {
                 .put("display_name", displayName.takeIf { it.isNotBlank() })
                 .put("email", email.takeIf { it.isNotBlank() }),
             successMessage = getString(R.string.vsm_cabinet_member_added),
+            afterSuccess = {
+                binding.etCabinetMemberName.text?.clear()
+                binding.etCabinetMemberEmail.text?.clear()
+            },
         )
     }
 
@@ -638,6 +897,21 @@ class CabinetActivity : BaseActivity() {
             path = "/cabinet/api/family/members/${member.id}/allocate",
             body = JSONObject().put("days", 1),
             successMessage = getString(R.string.vsm_cabinet_day_allocated),
+        )
+    }
+
+    private fun moveDayToFewest(member: CabinetMember) {
+        val target = members
+            .filter { it.id != member.id }
+            .minByOrNull { it.daysRemaining }
+            ?: return
+        mutateCabinet(
+            path = "/cabinet/api/family/rebalance",
+            body = JSONObject()
+                .put("from_member_id", member.id)
+                .put("to_member_id", target.id)
+                .put("days", 1),
+            successMessage = getString(R.string.vsm_cabinet_day_moved),
         )
     }
 
@@ -672,7 +946,12 @@ class CabinetActivity : BaseActivity() {
             .show()
     }
 
-    private fun mutateCabinet(path: String, body: JSONObject, successMessage: String) {
+    private fun mutateCabinet(
+        path: String,
+        body: JSONObject,
+        successMessage: String,
+        afterSuccess: (() -> Unit)? = null,
+    ) {
         setBusy(true)
         lifecycleScope.launch(Dispatchers.IO) {
             try {
@@ -681,6 +960,7 @@ class CabinetActivity : BaseActivity() {
                     hasChanged = true
                     setBusy(false)
                     showStatus(successMessage, StatusMode.SUCCESS)
+                    afterSuccess?.invoke()
                     loadCabinet()
                 }
             } catch (e: Exception) {

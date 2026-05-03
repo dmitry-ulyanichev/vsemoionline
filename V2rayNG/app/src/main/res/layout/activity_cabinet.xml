@@ -32,58 +32,44 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@drawable/restore_hero_bg"
             android:orientation="vertical"
-            android:paddingStart="16dp"
-            android:paddingTop="18dp"
-            android:paddingEnd="16dp"
-            android:paddingBottom="20dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:letterSpacing="0.08"
-                android:text="@string/vsm_cabinet_eyebrow"
-                android:textAllCaps="true"
-                android:textColor="@color/vsm_mint"
-                android:textSize="11sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/tvCabinetTitle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/vsm_cabinet_title"
-                android:textColor="@android:color/white"
-                android:textSize="24sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/tvCabinetIntro"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:lineSpacingExtra="1sp"
-                android:text="@string/vsm_cabinet_intro"
-                android:textColor="#E6EAF3"
-                android:textSize="14sp" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:paddingStart="16dp"
+            android:paddingStart="10dp"
             android:paddingTop="14dp"
-            android:paddingEnd="16dp"
+            android:paddingEnd="10dp"
             android:paddingBottom="8dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/restore_card_bg"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <TextView
+                    android:id="@+id/tvCabinetTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/vsm_cabinet_title"
+                    android:textColor="@color/vsm_restore_card_title"
+                    android:textSize="23sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvCabinetIntro"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:lineSpacingExtra="1sp"
+                    android:text="@string/vsm_cabinet_intro"
+                    android:textColor="@color/vsm_restore_card_body"
+                    android:textSize="13sp" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/tvCabinetStatus"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
+                android:layout_marginTop="10dp"
                 android:background="@drawable/restore_status_info_bg"
                 android:lineSpacingExtra="1sp"
                 android:paddingStart="14dp"
@@ -99,7 +85,7 @@
                 android:id="@+id/pbCabinet"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
+                android:layout_marginTop="10dp"
                 android:indeterminate="true"
                 android:visibility="gone"
                 app:indicatorColor="@color/vsm_mint" />
@@ -108,10 +94,10 @@
                 android:id="@+id/layoutCabinetLogin"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
+                android:layout_marginTop="10dp"
                 android:background="@drawable/restore_card_bg"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="18dp">
 
                 <TextView
                     android:id="@+id/tvCabinetLoginTitle"
@@ -135,7 +121,7 @@
                     android:id="@+id/tvCabinetEmailLabel"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="14dp"
                     android:text="@string/vsm_restore_email_label"
                     android:textColor="@color/vsm_restore_card_title"
                     android:textSize="13sp"
@@ -244,33 +230,128 @@
                 android:id="@+id/layoutCabinetContent"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
                 android:orientation="vertical"
                 android:visibility="gone">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
                     android:background="@drawable/restore_card_bg"
                     android:orientation="vertical"
-                    android:padding="16dp">
+                    android:padding="18dp">
 
                     <TextView
-                        android:id="@+id/tvCabinetAccount"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:textColor="@color/vsm_restore_card_title"
-                        android:textSize="17sp"
+                        android:letterSpacing="0.08"
+                        android:text="@string/vsm_cabinet_subscription_title"
+                        android:textAllCaps="true"
+                        android:textColor="@color/vsm_restore_card_body"
+                        android:textSize="11sp"
                         android:textStyle="bold" />
 
-                    <TextView
-                        android:id="@+id/tvCabinetSummary"
+                    <LinearLayout
+                        android:id="@+id/layoutCabinetDaysHero"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:lineSpacingExtra="1sp"
-                        android:textColor="@color/vsm_restore_card_body"
-                        android:textSize="14sp" />
+                        android:layout_marginTop="14dp"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:paddingTop="4dp"
+                        android:paddingBottom="2dp">
+
+                        <TextView
+                            android:id="@+id/tvCabinetDaysLeft"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:includeFontPadding="false"
+                            android:textColor="@color/vsm_sub_ok"
+                            android:textSize="70sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:letterSpacing="0.03"
+                            android:text="@string/vsm_cabinet_days_left_label"
+                            android:textAllCaps="true"
+                            android:textColor="@color/vsm_restore_card_body"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/layoutCabinetSubscriptionStats"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="22dp"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="88dp"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="4dp"
+                            android:background="@drawable/cabinet_inner_card_bg"
+                            android:gravity="center"
+                            android:orientation="vertical"
+                            android:padding="8dp">
+
+                            <TextView
+                                android:id="@+id/tvCabinetStatusBadge"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:background="@drawable/cabinet_badge_bg"
+                                android:paddingStart="9dp"
+                                android:paddingTop="3dp"
+                                android:paddingEnd="9dp"
+                                android:paddingBottom="3dp"
+                                android:text="@string/vsm_cabinet_status_active"
+                                android:textAllCaps="true"
+                                android:textColor="@color/vsm_sub_ok"
+                                android:textSize="11sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="8dp"
+                                android:text="@string/vsm_cabinet_status_label"
+                                android:textColor="@color/vsm_restore_card_body"
+                                android:textSize="11sp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="88dp"
+                            android:layout_weight="1"
+                            android:layout_marginStart="4dp"
+                            android:background="@drawable/cabinet_inner_card_bg"
+                            android:gravity="center"
+                            android:orientation="vertical"
+                            android:padding="8dp">
+
+                            <TextView
+                                android:id="@+id/tvCabinetLastPayment"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:gravity="center"
+                                android:maxLines="2"
+                                android:textColor="@color/vsm_restore_card_title"
+                                android:textSize="17sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="8dp"
+                                android:text="@string/vsm_cabinet_last_payment_label"
+                                android:textColor="@color/vsm_restore_card_body"
+                                android:textSize="11sp" />
+                        </LinearLayout>
+                    </LinearLayout>
 
                     <Button
                         android:id="@+id/btnCabinetRenew"
@@ -290,77 +371,164 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="10dp"
-                        android:backgroundTint="@color/vsm_restore_card_body"
-                        android:minHeight="48dp"
-                        android:paddingTop="14dp"
-                        android:paddingBottom="14dp"
+                        android:background="@drawable/cabinet_outline_button_bg"
+                        android:minHeight="42dp"
                         android:text="@string/vsm_cabinet_refresh"
                         android:textAllCaps="false"
-                        android:textColor="@android:color/white" />
+                        android:textColor="@color/vsm_link"
+                        android:visibility="gone" />
                 </LinearLayout>
 
                 <LinearLayout
+                    android:id="@+id/layoutCabinetDistribution"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
+                    android:layout_marginTop="10dp"
                     android:background="@drawable/restore_card_bg"
                     android:orientation="vertical"
                     android:padding="16dp">
 
                     <TextView
+                        android:id="@+id/tvCabinetDepositTitle"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="@string/vsm_cabinet_members_title"
                         android:textColor="@color/vsm_restore_card_title"
-                        android:textSize="17sp"
+                        android:textSize="14sp"
                         android:textStyle="bold" />
 
-                    <LinearLayout
-                        android:id="@+id/llCabinetMembers"
+                    <TextView
+                        android:id="@+id/tvCabinetDepositBody"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:orientation="vertical" />
-
-                    <Button
-                        android:id="@+id/btnCabinetAddMember"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="14dp"
-                        android:backgroundTint="@color/vsm_sub_ok"
-                        android:minHeight="48dp"
-                        android:paddingTop="14dp"
-                        android:paddingBottom="14dp"
-                        android:text="@string/vsm_cabinet_add_member"
-                        android:textAllCaps="false"
-                        android:textColor="@android:color/white" />
+                        android:layout_marginTop="3dp"
+                        android:text="@string/vsm_cabinet_distribution_body"
+                        android:textColor="@color/vsm_restore_card_body"
+                        android:textSize="12sp" />
 
                     <Button
                         android:id="@+id/btnCabinetDistribute"
-                        android:layout_width="match_parent"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:backgroundTint="@color/vsm_restore_card_body"
-                        android:minHeight="48dp"
-                        android:paddingTop="14dp"
-                        android:paddingBottom="14dp"
+                        android:layout_marginTop="12dp"
+                        android:background="@drawable/cabinet_outline_button_bg"
+                        android:minHeight="38dp"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
                         android:text="@string/vsm_cabinet_distribute"
                         android:textAllCaps="false"
-                        android:textColor="@android:color/white" />
+                        android:textColor="@color/vsm_link" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/llCabinetMembers"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="vertical" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/restore_card_bg"
+                    android:orientation="vertical"
+                    android:padding="18dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:letterSpacing="0.08"
+                        android:text="@string/vsm_cabinet_add_member_title"
+                        android:textAllCaps="true"
+                        android:textColor="@color/vsm_restore_card_body"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:text="@string/vsm_cabinet_name_label"
+                        android:textColor="@color/vsm_restore_card_title"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <EditText
+                        android:id="@+id/etCabinetMemberName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:background="@drawable/restore_input_bg"
+                        android:hint="@string/vsm_cabinet_name_hint"
+                        android:inputType="textCapSentences"
+                        android:maxLines="1"
+                        android:paddingStart="14dp"
+                        android:paddingTop="13dp"
+                        android:paddingEnd="14dp"
+                        android:paddingBottom="13dp"
+                        android:textColor="@color/vsm_restore_input_text"
+                        android:textColorHint="@color/vsm_restore_input_hint"
+                        android:textSize="15sp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:text="@string/vsm_cabinet_email_optional"
+                        android:textColor="@color/vsm_restore_card_title"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <EditText
+                        android:id="@+id/etCabinetMemberEmail"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:background="@drawable/restore_input_bg"
+                        android:hint="@string/vsm_restore_email_hint"
+                        android:inputType="textEmailAddress"
+                        android:maxLines="1"
+                        android:paddingStart="14dp"
+                        android:paddingTop="13dp"
+                        android:paddingEnd="14dp"
+                        android:paddingBottom="13dp"
+                        android:textColor="@color/vsm_restore_input_text"
+                        android:textColorHint="@color/vsm_restore_input_hint"
+                        android:textSize="15sp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/vsm_cabinet_email_optional_hint"
+                        android:textColor="@color/vsm_restore_card_hint"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+
+                    <Button
+                        android:id="@+id/btnCabinetAddMember"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:backgroundTint="@color/vsm_mint"
+                        android:minHeight="38dp"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:text="@string/vsm_cabinet_add"
+                        android:textAllCaps="false"
+                        android:textColor="@color/vsm_toolbar" />
                 </LinearLayout>
 
                 <Button
                     android:id="@+id/btnCabinetLogout"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:backgroundTint="@color/vsm_sub_urgent"
-                    android:minHeight="48dp"
-                    android:paddingTop="14dp"
-                    android:paddingBottom="14dp"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/cabinet_danger_outline_button_bg"
+                    android:minHeight="42dp"
                     android:text="@string/vsm_cabinet_logout"
                     android:textAllCaps="false"
-                    android:textColor="@android:color/white" />
+                    android:textColor="@color/vsm_sub_urgent" />
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>

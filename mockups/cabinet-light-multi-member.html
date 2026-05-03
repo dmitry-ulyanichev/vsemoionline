@@ -1,0 +1,1097 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Личный кабинет - light multi-member mockup</title>
+  <style>
+    :root {
+      --bg: #1f2344;
+      --page: #f5f5f5;
+      --surface: #fafbfc;
+      --surface-2: #ffffff;
+      --surface-3: #e8eaf6;
+      --border: #e0e0e0;
+      --border-strong: rgba(21, 101, 192, 0.28);
+      --text: #212121;
+      --muted: #616161;
+      --muted-2: #9e9e9e;
+      --mint: #7dc4a0;
+      --mint-strong: #2e7d32;
+      --mint-dim: #e8f5e9;
+      --link: #1565c0;
+      --primary: #1565c0;
+      --input-bg: #ffffff;
+      --input-text: #263238;
+      --danger: #c62828;
+      --shadow: rgba(31, 35, 68, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    a {
+      color: var(--link);
+      text-decoration: none;
+    }
+
+    .stage {
+      min-height: 100vh;
+      padding: 18px 12px 28px;
+      background:
+        radial-gradient(circle at 86% 5%, rgba(125, 196, 160, 0.18), rgba(125, 196, 160, 0) 210px),
+        linear-gradient(180deg, var(--bg) 0, var(--bg) 88px, var(--page) 88px, var(--page) 100%);
+    }
+
+    .phone {
+      width: min(100%, 390px);
+      margin: 0 auto;
+      overflow: hidden;
+      border: 1px solid rgba(142, 163, 188, 0.18);
+      border-radius: 28px;
+      background: var(--page);
+      box-shadow: 0 24px 70px var(--shadow);
+    }
+
+    .system-bar {
+      height: 26px;
+      padding: 7px 18px 0;
+      display: flex;
+      justify-content: space-between;
+      color: #d9e3ef;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .toolbar {
+      height: 52px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg);
+      border-bottom: 1px solid rgba(142, 163, 188, 0.12);
+      color: #ffffff;
+    }
+
+    .back {
+      width: 32px;
+      height: 32px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      background: transparent;
+      color: #ffffff;
+      display: inline-grid;
+      place-items: center;
+      cursor: default;
+    }
+
+    .toolbar-title {
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .content {
+      padding: 14px 10px 20px;
+    }
+
+    .mock-controls {
+      display: flex;
+      gap: 7px;
+      margin: 0 0 10px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .mock-controls::-webkit-scrollbar {
+      display: none;
+    }
+
+    .state-chip {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      padding: 7px 11px;
+      white-space: nowrap;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .state-chip.is-active {
+      background: var(--link);
+      border-color: var(--link);
+      color: #ffffff;
+    }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--surface);
+      margin-top: 10px;
+      padding: 18px;
+    }
+
+    .card-title {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .title-card h1 {
+      margin: 0;
+      color: var(--text);
+      font-size: 23px;
+      line-height: 1.16;
+      font-weight: 800;
+    }
+
+    .title-card p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .subscription {
+      text-align: center;
+      padding: 22px 24px 18px;
+    }
+
+    .days-number {
+      color: var(--mint-strong);
+      font-size: 70px;
+      line-height: 0.92;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .days-label {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 22px;
+      text-align: center;
+    }
+
+    .stat {
+      min-height: 88px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface-2);
+      padding: 16px 8px 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      max-width: 100%;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: var(--mint-dim);
+      border: 1px solid rgba(166, 191, 176, 0.2);
+      color: var(--mint-strong);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .payment-date {
+      color: var(--text);
+      font-size: 17px;
+      line-height: 1.28;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .stat-label {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .btn {
+      min-height: 38px;
+      border-radius: 7px;
+      border: 1px solid transparent;
+      padding: 9px 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      font-weight: 800;
+      cursor: default;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #ffffff;
+    }
+
+    .btn-success {
+      background: var(--mint);
+      color: #0f1222;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border-color: var(--border-strong);
+      color: var(--link);
+    }
+
+    .btn-ghost {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      padding: 5px 4px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .renew-row {
+      margin-top: 17px;
+      display: flex;
+      justify-content: flex-start;
+    }
+
+    .owner-card {
+      position: relative;
+      padding-top: 18px;
+    }
+
+    .owner-badge {
+      position: absolute;
+      top: -10px;
+      left: 14px;
+      height: 20px;
+      padding: 2px 9px;
+      border: 1px solid var(--border-strong);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--link);
+      font-size: 10px;
+      line-height: 14px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .owner-header {
+      display: block;
+    }
+
+    .member-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: start;
+      gap: 10px;
+    }
+
+    .owner-name-row {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+      gap: 7px;
+    }
+
+    .owner-name {
+      min-width: 0;
+      overflow: hidden;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 800;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .icon-btn {
+      width: 31px;
+      height: 31px;
+      flex: 0 0 31px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface-2);
+      color: var(--link);
+      display: inline-grid;
+      place-items: center;
+      padding: 0;
+    }
+
+    .owner-status {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .member-days-control {
+      display: grid;
+      grid-template-columns: 31px 45px 31px;
+      align-items: center;
+      gap: 5px;
+      flex: 0 0 auto;
+    }
+
+    .day-stepper {
+      text-align: center;
+      color: var(--mint);
+      font-size: 11px;
+      line-height: 1.05;
+    }
+
+    .day-stepper strong {
+      display: block;
+      color: var(--mint-strong);
+      font-size: 26px;
+      line-height: 22px;
+      font-weight: 800;
+    }
+
+    .delete-row {
+      margin-top: 12px;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .btn-danger {
+      border-color: rgba(239, 154, 154, 0.45);
+      color: var(--danger);
+    }
+
+    .distribution-callout {
+      border-color: rgba(166, 191, 176, 0.36);
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 16px;
+    }
+
+    .distribution-title {
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .distribution-text {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .activation-box {
+      margin-top: 16px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface-2);
+      padding: 14px;
+    }
+
+    .activation-label {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+    }
+
+    .activation-text {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .divider {
+      height: 1px;
+      margin: 14px 0;
+      background: rgba(142, 163, 188, 0.18);
+    }
+
+    .code-row,
+    .link-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .code-row {
+      margin-top: 10px;
+    }
+
+    .token {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface-3);
+      color: var(--text);
+      padding: 7px 12px;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      white-space: nowrap;
+    }
+
+    .link-row {
+      margin-top: 9px;
+    }
+
+    .activation-url {
+      min-width: 0;
+      flex: 1 1 auto;
+      overflow: hidden;
+      color: var(--link);
+      font-size: 11px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .reissue {
+      margin-top: 12px;
+    }
+
+    .add-copy {
+      margin: 0 0 16px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .field {
+      margin-top: 12px;
+    }
+
+    .label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .optional {
+      color: var(--muted-2);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .input {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid rgba(142, 163, 188, 0.3);
+      border-radius: 14px;
+      background: var(--input-bg);
+      color: var(--input-text);
+      padding: 9px 12px;
+      outline: none;
+    }
+
+    .input::placeholder {
+      color: #78909c;
+    }
+
+    .hint {
+      margin: 8px 0 12px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .history-card {
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .history-toggle {
+      padding: 17px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .history-title {
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .history-subtitle {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .arrow {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .history-body {
+      border-top: 1px solid rgba(142, 163, 188, 0.16);
+    }
+
+    .filters {
+      padding: 15px 18px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .filter {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      padding: 7px 11px;
+      font-size: 11px;
+    }
+
+    .filter.active {
+      border-color: var(--mint);
+      background: var(--mint);
+      color: #172033;
+    }
+
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .history-table th,
+    .history-table td {
+      padding: 13px 18px;
+      border-top: 1px solid rgba(142, 163, 188, 0.12);
+      text-align: left;
+    }
+
+    .history-table th {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .history-table td {
+      color: var(--muted);
+      font-size: 12px;
+      vertical-align: middle;
+    }
+
+    .history-table .event {
+      color: var(--link);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .history-table .event strong {
+      color: var(--text);
+    }
+
+    .history-table .days {
+      color: var(--mint);
+      font-size: 13px;
+      font-weight: 800;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .history-footer {
+      padding: 14px 18px 18px;
+      border-top: 1px solid rgba(142, 163, 188, 0.12);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .shown {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    details.download {
+      padding: 0;
+    }
+
+    details.download summary {
+      list-style: none;
+      padding: 17px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      cursor: default;
+    }
+
+    details.download summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .download-body {
+      padding: 0 18px 18px;
+      border-top: 1px solid rgba(142, 163, 188, 0.16);
+    }
+
+    .download-option {
+      margin-top: 10px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface-2);
+      padding: 13px;
+    }
+
+    .download-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .download-name {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .download-size {
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .download-copy {
+      margin-top: 9px;
+    }
+
+    .contact {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface-2);
+      padding: 12px;
+    }
+
+    .contact + .contact {
+      margin-top: 9px;
+    }
+
+    .contact-label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+    }
+
+    .contact-value {
+      margin-top: 7px;
+      color: var(--link);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .modal-layer {
+      position: fixed;
+      inset: 0;
+      display: none;
+      place-items: center;
+      padding: 22px;
+      background: rgba(31, 35, 68, 0.32);
+    }
+
+    body.show-dialog .modal-layer {
+      display: grid;
+    }
+
+    .dialog {
+      width: min(100%, 310px);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--surface);
+      padding: 22px 24px 24px;
+      box-shadow: 0 22px 60px rgba(0, 0, 0, 0.42);
+    }
+
+    .dialog h2 {
+      margin: 0;
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    .dialog p {
+      margin: 10px 0 16px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .dialog-actions {
+      margin-top: 18px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 9px;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    @media (max-width: 360px) {
+      .content {
+        padding-left: 8px;
+        padding-right: 8px;
+      }
+
+      .card {
+        padding: 16px;
+      }
+
+      .subscription {
+        padding-left: 18px;
+        padding-right: 18px;
+      }
+
+      .member-header {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .member-days-control {
+        margin-top: 4px;
+      }
+
+      .history-table th,
+      .history-table td {
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage">
+    <section class="phone" aria-label="Макет личного кабинета">
+      <div class="system-bar">
+        <span>9:41</span>
+        <span>LTE 100%</span>
+      </div>
+
+      <header class="toolbar">
+        <button class="back" aria-label="Назад">
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M15 18 9 12l6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="toolbar-title">Все Мои Онлайн</div>
+      </header>
+
+      <div class="content">
+        <div class="mock-controls" aria-label="Состояния макета">
+          <button class="state-chip is-active" data-state="normal">Обычный</button>
+          <button class="state-chip" data-state="code">Код выпущен</button>
+          <button class="state-chip" data-state="dialog">Диалог имени</button>
+        </div>
+
+        <section class="card title-card">
+          <h1>Личный кабинет</h1>
+          <p>Добавляйте пользователей, распределяйте оплаченные дни и перевыпускайте коды активации устройств.</p>
+        </section>
+
+        <section class="card subscription">
+          <h2 class="card-title">Подписка</h2>
+          <div class="stat-grid" style="margin-top:0;">
+            <div class="stat">
+              <div><span class="badge">Активна</span></div>
+              <div class="stat-label">Статус</div>
+            </div>
+            <div class="stat">
+              <div class="payment-date">23 апр 2026</div>
+              <div class="stat-label">Последняя оплата</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card distribution-callout">
+          <div>
+            <div class="distribution-title">Есть 9 нераспределённых дней</div>
+            <div class="distribution-text">Можно добавить их пользователям вручную или разделить поровну.</div>
+          </div>
+          <button class="btn btn-outline">Распределить поровну</button>
+        </section>
+
+        <section class="card owner-card" data-owner-state="normal">
+          <div class="owner-badge">Владелец</div>
+          <div class="member-header">
+            <div>
+              <div class="owner-name-row">
+                <div class="owner-name">dmitry.ulyanichev@gmail.com</div>
+                <button class="icon-btn" aria-label="Изменить имя">
+                  <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0 0-3l-.5-.5a2.1 2.1 0 0 0-3 0l-10 10L4 20Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                    <path d="m13.5 6.5 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                  </svg>
+                </button>
+              </div>
+              <div class="owner-status">Устройство привязано</div>
+            </div>
+            <div class="member-days-control" aria-label="Дни владельца">
+              <button class="icon-btn" aria-label="Убавить день">−</button>
+              <div class="day-stepper"><strong>18</strong>дней</div>
+              <button class="icon-btn" aria-label="Добавить день">+</button>
+            </div>
+          </div>
+
+          <div class="activation-box">
+            <p class="activation-label">Активация устройства</p>
+            <p class="activation-text">Если нужно подключить новое устройство, перевыпустите код активации.</p>
+            <button class="btn btn-outline">Перевыпустить код активации</button>
+          </div>
+        </section>
+
+        <section class="card owner-card" data-owner-state="code" hidden>
+          <div class="owner-badge">Владелец</div>
+          <div class="member-header">
+            <div>
+              <div class="owner-name-row">
+                <div class="owner-name">dmitry.ulyanichev@gmail.com</div>
+                <button class="icon-btn" aria-label="Изменить имя">
+                  <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0 0-3l-.5-.5a2.1 2.1 0 0 0-3 0l-10 10L4 20Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                    <path d="m13.5 6.5 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                  </svg>
+                </button>
+              </div>
+              <div class="owner-status">Ожидает активации нового устройства</div>
+            </div>
+            <div class="member-days-control" aria-label="Дни владельца">
+              <button class="icon-btn" aria-label="Убавить день">−</button>
+              <div class="day-stepper"><strong>18</strong>дней</div>
+              <button class="icon-btn" aria-label="Добавить день">+</button>
+            </div>
+          </div>
+
+          <div class="activation-box">
+            <p class="activation-label">Установка</p>
+            <p class="activation-text"><a href="#app-download">Поделитесь ссылкой на скачивание</a></p>
+            <div class="divider"></div>
+            <p class="activation-label">Активация устройства</p>
+            <p class="activation-text">После установки активируйте устройство по ссылке или коду ниже.</p>
+            <div class="code-row">
+              <span class="token">k8hb fv9r</span>
+              <button class="btn-ghost">
+                <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="8" y="8" width="10" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                  <path d="M6 16H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                </svg>
+                Копировать
+              </button>
+            </div>
+            <div class="link-row">
+              <a class="activation-url" href="#">https://vmonl....token=K8HBFV9R</a>
+              <button class="btn-ghost">
+                <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="8" y="8" width="10" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                  <path d="M6 16H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                </svg>
+                Копировать
+              </button>
+            </div>
+            <button class="btn btn-outline reissue">Перевыпустить код активации</button>
+          </div>
+        </section>
+
+        <section class="card owner-card">
+          <div class="member-header">
+            <div>
+              <div class="owner-name-row">
+                <div class="owner-name">Мамин телефон с очень длинным названием</div>
+                <button class="icon-btn" aria-label="Изменить имя">
+                  <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0 0-3l-.5-.5a2.1 2.1 0 0 0-3 0l-10 10L4 20Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                    <path d="m13.5 6.5 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                  </svg>
+                </button>
+              </div>
+              <div class="owner-status">Устройство привязано</div>
+            </div>
+            <div class="member-days-control" aria-label="Дни пользователя">
+              <button class="icon-btn" aria-label="Убавить день">−</button>
+              <div class="day-stepper"><strong>15</strong>дней</div>
+              <button class="icon-btn" aria-label="Добавить день">+</button>
+            </div>
+          </div>
+
+          <div class="activation-box">
+            <p class="activation-label">Активация устройства</p>
+            <p class="activation-text">Если нужно подключить новое устройство, перевыпустите код активации.</p>
+            <button class="btn btn-outline">Перевыпустить код активации</button>
+          </div>
+
+          <div class="delete-row">
+            <button class="btn btn-outline btn-danger">Удалить пользователя</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">Добавить пользователя / устройство</h2>
+          <div class="field">
+            <label class="label" for="member-name">Имя</label>
+            <input class="input" id="member-name" value="" placeholder="Мамин телефон">
+          </div>
+          <div class="field">
+            <label class="label" for="member-email">E-mail <span class="optional">необязательно *</span></label>
+            <input class="input" id="member-email" value="" placeholder="email@example.com">
+          </div>
+          <p class="hint">* Без e-mail восстановить доступ можно только через этот кабинет.</p>
+          <button class="btn btn-success">+ Добавить</button>
+        </section>
+
+        <section class="card history-card">
+          <div class="history-toggle">
+            <div>
+              <div class="history-title">История транзакций</div>
+              <div class="history-subtitle">Платежи и изменения внутри семьи</div>
+            </div>
+            <span class="arrow">▲</span>
+          </div>
+          <div class="history-body">
+            <div class="filters">
+              <button class="filter">Все</button>
+              <button class="filter active">Оплата</button>
+              <button class="filter">Распределение</button>
+            </div>
+            <table class="history-table" aria-label="История транзакций">
+              <thead>
+                <tr>
+                  <th>Дата</th>
+                  <th>Событие</th>
+                  <th style="text-align:right;">Дни</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>23 апр 2026</td>
+                  <td class="event">Оплата: <strong>149 ₽</strong></td>
+                  <td class="days">+30</td>
+                </tr>
+                <tr>
+                  <td>18 мар 2026</td>
+                  <td class="event">Оплата: <strong>149 ₽</strong></td>
+                  <td class="days">+30</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="history-footer">
+              <span class="shown">Показано 2 из 10</span>
+              <button class="btn btn-outline">Показать ещё</button>
+            </div>
+          </div>
+        </section>
+
+        <details class="card download" id="app-download" open>
+          <summary>
+            <span class="card-title" style="margin:0;">Поделиться ссылкой на приложение</span>
+            <span class="arrow">▼</span>
+          </summary>
+          <div class="download-body">
+            <div class="download-option">
+              <div class="download-head">
+                <div>
+                  <div class="badge">Рекомендуем</div>
+                  <div class="download-name" style="margin-top:8px;">Для большинства телефонов Android</div>
+                </div>
+                <div class="download-size">26,3 МБ</div>
+              </div>
+              <button class="btn btn-outline download-copy">Копировать ссылку</button>
+            </div>
+            <div class="download-option">
+              <div class="download-head">
+                <div class="download-name">Для старых телефонов Android</div>
+                <div class="download-size">26,6 МБ</div>
+              </div>
+              <button class="btn btn-outline download-copy">Копировать ссылку</button>
+            </div>
+            <div class="download-option">
+              <div class="download-head">
+                <div class="download-name">Универсальная версия</div>
+                <div class="download-size">60,9 МБ</div>
+              </div>
+              <button class="btn btn-outline download-copy">Копировать ссылку</button>
+            </div>
+          </div>
+        </details>
+
+        <section class="card">
+          <h2 class="card-title">Контакты</h2>
+          <div class="contact">
+            <div class="contact-label">Поддержка (в Telegram)</div>
+            <div class="contact-value">@vsemoionline_bot</div>
+          </div>
+          <div class="contact">
+            <div class="contact-label">E-mail</div>
+            <div class="contact-value">vsemoionlinevpn@gmail.com</div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal-layer" aria-hidden="true">
+    <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+      <h2 id="dialog-title">Изменить имя</h2>
+      <p>Введите имя, которое будет отображаться в кабинете.</p>
+      <div class="field">
+        <label class="label" for="display-name">Имя</label>
+        <input class="input" id="display-name" value="dmitry.ulyanichev@gmail.com">
+      </div>
+      <div class="dialog-actions">
+        <button class="btn btn-outline">Отмена</button>
+        <button class="btn btn-success">Сохранить</button>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const body = document.body;
+    const chips = Array.from(document.querySelectorAll(".state-chip"));
+    const normal = document.querySelector('[data-owner-state="normal"]');
+    const code = document.querySelector('[data-owner-state="code"]');
+
+    function setState(state) {
+      chips.forEach((chip) => chip.classList.toggle("is-active", chip.dataset.state === state));
+      normal.hidden = state === "code";
+      code.hidden = state !== "code";
+      body.classList.toggle("show-dialog", state === "dialog");
+    }
+
+    chips.forEach((chip) => chip.addEventListener("click", () => setState(chip.dataset.state)));
+  </script>
+</body>
+</html>

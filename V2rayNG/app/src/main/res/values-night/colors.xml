@@ -32,4 +32,8 @@
     <color name="vsm_restore_card_title">#E8EAF0</color>
     <color name="vsm_restore_card_body">#C2CBD6</color>
     <color name="vsm_restore_card_hint">#8FA0B4</color>
+    <color name="vsm_cabinet_surface3">#2E3558</color>
+    <color name="vsm_cabinet_mint_dim">#247DC4A0</color>
+    <color name="vsm_cabinet_border_strong">#5790CAF9</color>
+    <color name="vsm_cabinet_danger_border">#73EF9A9A</color>
 </resources>
