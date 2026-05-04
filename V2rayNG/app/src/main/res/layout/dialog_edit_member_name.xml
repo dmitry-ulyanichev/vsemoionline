@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@drawable/dialog_bg">
+
+    <TextView
+        android:id="@+id/tvEditMemberTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/vsm_cabinet_edit_name"
+        android:textColor="@color/vsm_restore_card_title"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/tvEditMemberSubtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="@string/vsm_cabinet_edit_name_hint"
+        android:textColor="@color/vsm_restore_card_body"
+        android:textSize="13sp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:text="@string/vsm_cabinet_name_label"
+        android:textColor="@color/vsm_restore_card_title"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <EditText
+        android:id="@+id/etEditMemberName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:background="@drawable/restore_input_bg"
+        android:inputType="textCapSentences"
+        android:maxLines="1"
+        android:paddingStart="12dp"
+        android:paddingTop="9dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="9dp"
+        android:textColor="@color/vsm_restore_input_text"
+        android:textColorHint="@color/vsm_restore_input_hint"
+        android:textSize="15sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:gravity="end"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btnEditMemberCancel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/cabinet_outline_button_bg"
+            android:minHeight="38dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:text="@string/vsm_cabinet_cancel"
+            android:textAllCaps="false"
+            android:textColor="@color/vsm_link"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnEditMemberSave"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="9dp"
+            android:backgroundTint="@color/vsm_mint"
+            android:minHeight="38dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:text="@string/vsm_cabinet_save"
+            android:textAllCaps="false"
+            android:textColor="@color/vsm_toolbar"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+</LinearLayout>

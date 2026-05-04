@@ -471,6 +471,16 @@
                         android:textSize="15sp" />
 
                     <TextView
+                        android:id="@+id/tvCabinetMemberNameError"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="@string/vsm_cabinet_name_required"
+                        android:textColor="@color/vsm_sub_urgent"
+                        android:textSize="12sp"
+                        android:visibility="gone" />
+
+                    <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="14dp"
@@ -519,16 +529,379 @@
                         android:textColor="@color/vsm_toolbar" />
                 </LinearLayout>
 
-                <Button
-                    android:id="@+id/btnCabinetLogout"
+                <!-- History Card -->
+                <LinearLayout
+                    android:id="@+id/layoutCabinetHistory"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:background="@drawable/cabinet_danger_outline_button_bg"
-                    android:minHeight="42dp"
-                    android:text="@string/vsm_cabinet_logout"
-                    android:textAllCaps="false"
-                    android:textColor="@color/vsm_sub_urgent" />
+                    android:background="@drawable/restore_card_bg"
+                    android:orientation="vertical"
+                    android:padding="0dp">
+
+                    <LinearLayout
+                        android:id="@+id/btnHistoryToggle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:foreground="?android:attr/selectableItemBackground"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="18dp"
+                        android:paddingTop="17dp"
+                        android:paddingEnd="18dp"
+                        android:paddingBottom="17dp">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:id="@+id/tvHistoryTitle"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/vsm_cabinet_history_title"
+                                android:textColor="@color/vsm_restore_card_title"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvHistorySubtitle"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="@string/vsm_cabinet_history_subtitle"
+                                android:textColor="@color/vsm_restore_card_body"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <ImageView
+                            android:id="@+id/ivHistoryArrow"
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:src="@drawable/ic_arrow_down_16dp"
+                            android:contentDescription="@string/vsm_cabinet_history_toggle" />
+                    </LinearLayout>
+
+                    <!-- Expandable body (hidden by default) -->
+                    <LinearLayout
+                        android:id="@+id/layoutHistoryBody"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:visibility="gone">
+
+                        <View
+                            android:layout_width="match_parent"
+                            android:layout_height="1dp"
+                            android:background="@color/vsm_border" />
+
+                        <!-- Filter chips -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:paddingStart="18dp"
+                            android:paddingTop="15dp"
+                            android:paddingEnd="18dp"
+                            android:paddingBottom="15dp">
+
+                            <TextView
+                                android:id="@+id/chipHistoryAll"
+                                style="@style/ChipHistoryFilter"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/vsm_cabinet_history_all" />
+
+                            <TextView
+                                android:id="@+id/chipHistoryPayment"
+                                style="@style/ChipHistoryFilter"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="8dp"
+                                android:text="@string/vsm_cabinet_history_payment" />
+
+                            <TextView
+                                android:id="@+id/chipHistoryDistribution"
+                                style="@style/ChipHistoryFilter"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="8dp"
+                                android:text="@string/vsm_cabinet_history_distribution" />
+                        </LinearLayout>
+
+                        <!-- Table header -->
+                        <LinearLayout
+                            android:id="@+id/layoutHistoryTable"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:paddingStart="18dp"
+                            android:paddingEnd="18dp">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="0.28"
+                                    android:letterSpacing="0.06"
+                                    android:layout_marginEnd="8dp"
+                                    android:text="@string/vsm_cabinet_history_date"
+                                    android:textAllCaps="true"
+                                    android:textColor="@color/vsm_restore_card_body"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="0.44"
+                                    android:letterSpacing="0.06"
+                                    android:layout_marginEnd="8dp"
+                                    android:text="@string/vsm_cabinet_history_event"
+                                    android:textAllCaps="true"
+                                    android:textColor="@color/vsm_restore_card_body"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="0.18"
+                                    android:gravity="end"
+                                    android:letterSpacing="0.06"
+                                    android:text="@string/vsm_cabinet_history_days"
+                                    android:textAllCaps="true"
+                                    android:textColor="@color/vsm_restore_card_body"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold" />
+                            </LinearLayout>
+
+                            <View
+                                android:layout_width="match_parent"
+                                android:layout_height="1dp"
+                                android:layout_marginTop="10dp"
+                                android:background="@color/vsm_border" />
+
+                            <!-- Table rows container -->
+                            <LinearLayout
+                                android:id="@+id/llHistoryRows"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical"
+                                android:paddingBottom="10dp" />
+                        </LinearLayout>
+
+                        <!-- Row count -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:paddingStart="18dp"
+                            android:paddingTop="14dp"
+                            android:paddingEnd="18dp"
+                            android:paddingBottom="18dp">
+
+                            <TextView
+                                android:id="@+id/tvHistoryCount"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:textColor="@color/vsm_restore_card_body"
+                                android:textSize="12sp"
+                                android:visibility="gone" />
+
+                            <Button
+                                android:id="@+id/btnHistoryLoadMore"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:background="@drawable/cabinet_outline_button_bg"
+                                android:minHeight="38dp"
+                                android:paddingStart="14dp"
+                                android:paddingEnd="14dp"
+                                android:text="@string/vsm_cabinet_show_more"
+                                android:textAllCaps="false"
+                                android:textColor="@color/vsm_link"
+                                android:visibility="gone" />
+                        </LinearLayout>
+
+                        <!-- Empty state -->
+                        <TextView
+                            android:id="@+id/layoutHistoryEmpty"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:paddingStart="18dp"
+                            android:paddingEnd="18dp"
+                            android:paddingBottom="14dp"
+                            android:text="@string/vsm_cabinet_history_empty"
+                            android:textColor="@color/vsm_restore_card_body"
+                            android:textSize="14sp"
+                            android:visibility="gone" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/layoutCabinetDownload"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/restore_card_bg"
+                    android:orientation="vertical"
+                    android:padding="0dp">
+
+                    <!-- Toggle header -->
+                    <LinearLayout
+                        android:id="@+id/btnDownloadToggle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:foreground="?android:attr/selectableItemBackground"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="18dp"
+                        android:paddingTop="17dp"
+                        android:paddingEnd="18dp"
+                        android:paddingBottom="17dp">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/vsm_cabinet_download_title"
+                                android:textColor="@color/vsm_restore_card_title"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="@string/vsm_cabinet_download_subtitle"
+                                android:textColor="@color/vsm_restore_card_body"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <ImageView
+                            android:id="@+id/ivDownloadArrow"
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:contentDescription="@string/vsm_cabinet_download_toggle"
+                            android:src="@drawable/ic_arrow_down_16dp" />
+                    </LinearLayout>
+
+                    <!-- Expandable body (hidden by default) -->
+                    <LinearLayout
+                        android:id="@+id/layoutDownloadBody"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:visibility="gone">
+
+                        <View
+                            android:layout_width="match_parent"
+                            android:layout_height="1dp"
+                            android:background="@color/vsm_border" />
+
+                        <LinearLayout
+                            android:id="@+id/llDownloadOptions"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:padding="18dp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/restore_card_bg"
+                    android:orientation="vertical"
+                    android:padding="18dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:letterSpacing="0.08"
+                        android:text="@string/vsm_cabinet_contacts_title"
+                        android:textAllCaps="true"
+                        android:textColor="@color/vsm_restore_card_body"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:background="@drawable/cabinet_inner_card_bg"
+                        android:orientation="vertical"
+                        android:padding="12dp">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:letterSpacing="0.07"
+                            android:text="@string/vsm_cabinet_contacts_telegram_label"
+                            android:textAllCaps="true"
+                            android:textColor="@color/vsm_restore_card_body"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvContactTelegram"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="7dp"
+                            android:text="@string/vsm_cabinet_contacts_telegram_value"
+                            android:textColor="@color/vsm_link"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="9dp"
+                        android:background="@drawable/cabinet_inner_card_bg"
+                        android:orientation="vertical"
+                        android:padding="12dp">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:letterSpacing="0.07"
+                            android:text="@string/vsm_cabinet_contacts_email_label"
+                            android:textAllCaps="true"
+                            android:textColor="@color/vsm_restore_card_body"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvContactEmail"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="7dp"
+                            android:text="@string/vsm_cabinet_contacts_email_value"
+                            android:textColor="@color/vsm_link"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+                </LinearLayout>
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>

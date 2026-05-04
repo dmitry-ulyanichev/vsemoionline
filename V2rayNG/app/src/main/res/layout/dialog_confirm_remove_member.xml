@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@drawable/dialog_bg">
+
+    <TextView
+        android:id="@+id/tvConfirmRemoveTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/vsm_cabinet_remove_member"
+        android:textColor="@color/vsm_restore_card_title"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/tvConfirmRemoveMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:textColor="@color/vsm_restore_card_body"
+        android:textSize="13sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:gravity="end"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btnConfirmRemoveCancel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/cabinet_outline_button_bg"
+            android:minHeight="38dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:text="@string/vsm_cabinet_cancel"
+            android:textAllCaps="false"
+            android:textColor="@color/vsm_link"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnConfirmRemoveConfirm"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="9dp"
+            android:background="@drawable/cabinet_danger_outline_button_bg"
+            android:minHeight="38dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:text="@string/vsm_cabinet_remove"
+            android:textAllCaps="false"
+            android:textColor="@color/vsm_sub_urgent"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+</LinearLayout>

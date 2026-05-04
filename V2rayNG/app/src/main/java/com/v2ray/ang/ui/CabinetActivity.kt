@@ -35,6 +35,9 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLDecoder
+import android.text.Spannable
+import android.text.SpannableStringBuilder
+import android.text.style.ForegroundColorSpan
 
 class CabinetActivity : BaseActivity() {
     private val binding by lazy { ActivityCabinetBinding.inflate(layoutInflater) }
@@ -60,6 +63,27 @@ class CabinetActivity : BaseActivity() {
         val activationUrl: String?,
     )
 
+    private data class CabinetHistoryEntry(
+        val dateLabel: String,
+        val descriptionHtml: String,
+        val daysLabel: String,
+        val daysClass: String,
+    )
+
+    private data class CabinetHistoryPage(
+        val items: List<CabinetHistoryEntry>,
+        val nextCursor: String?,
+        val hasMore: Boolean,
+        val filter: String,
+    )
+
+    private data class DownloadOption(
+        val badge: String?,
+        val name: String,
+        val size: String,
+        val url: String,
+    )
+
     private enum class StatusMode {
         INFO,
         ERROR,
@@ -83,6 +107,11 @@ class CabinetActivity : BaseActivity() {
     private var members: List<CabinetMember> = emptyList()
     private var hasChanged = false
     private var attemptedTrustedDeviceSession = false
+    private var historyFilter = "payment"
+    private var historyNextCursor: String? = null
+    private var historyHasMore = false
+    private var isLoadingHistory = false
+    private var downloadExpanded = false
 
     private val paymentActivity = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (it.resultCode == Activity.RESULT_OK) {
@@ -110,16 +139,64 @@ class CabinetActivity : BaseActivity() {
             paymentActivity.launch(Intent(this, PaymentActivity::class.java))
         }
         binding.btnCabinetAddMember.setOnClickListener {
-            addMember(
-                displayName = binding.etCabinetMemberName.text?.toString()?.trim().orEmpty(),
-                email = binding.etCabinetMemberEmail.text?.toString()?.trim()?.lowercase().orEmpty(),
-            )
+            val displayName = binding.etCabinetMemberName.text?.toString()?.trim().orEmpty()
+            val email = binding.etCabinetMemberEmail.text?.toString()?.trim()?.lowercase().orEmpty()
+            if (displayName.isBlank() && email.isBlank()) {
+                showMemberNameError(true)
+            } else {
+                showMemberNameError(false)
+                addMember(displayName = displayName, email = email)
+            }
         }
+
+        binding.btnHistoryToggle.setOnClickListener {
+            val isExpanded = binding.layoutHistoryBody.visibility == View.VISIBLE
+            if (isExpanded) {
+                binding.layoutHistoryBody.visibility = View.GONE
+                binding.ivHistoryArrow.rotation = 0f
+            } else {
+                binding.layoutHistoryBody.visibility = View.VISIBLE
+                binding.ivHistoryArrow.rotation = 180f
+                if (binding.llHistoryRows.childCount == 0) {
+                    loadHistory(reset = true)
+                }
+            }
+        }
+
+        binding.chipHistoryAll.setOnClickListener { setHistoryFilter("all") }
+        binding.chipHistoryPayment.setOnClickListener { setHistoryFilter("payment") }
+        binding.chipHistoryDistribution.setOnClickListener { setHistoryFilter("distribution") }
+        binding.chipHistoryPayment.isSelected = true
+        binding.btnHistoryLoadMore.setOnClickListener { loadHistory(reset = false) }
+
+        binding.btnHistoryLoadMore.text = getString(R.string.vsm_cabinet_show_more)
+        binding.btnHistoryLoadMore.visibility = View.GONE
+        binding.layoutHistoryBody.visibility = View.GONE
+        binding.layoutHistoryEmpty.visibility = View.GONE
+        binding.layoutHistoryTable.visibility = View.VISIBLE
+
+        binding.btnDownloadToggle.setOnClickListener {
+            downloadExpanded = !downloadExpanded
+            if (downloadExpanded) {
+                binding.layoutDownloadBody.visibility = View.VISIBLE
+                binding.ivDownloadArrow.rotation = 180f
+                if (binding.llDownloadOptions.childCount == 0) {
+                    populateDownloadOptions()
+                }
+            } else {
+                binding.layoutDownloadBody.visibility = View.GONE
+                binding.ivDownloadArrow.rotation = 0f
+            }
+        }
+
         binding.btnCabinetDistribute.setOnClickListener { distributeEvenly() }
-        binding.btnCabinetLogout.setOnClickListener {
-            clearCabinetSession()
-            showLoginState()
-            showStatus(getString(R.string.vsm_cabinet_logged_out), StatusMode.INFO)
+
+        binding.tvContactTelegram.setOnClickListener {
+            Utils.openUri(this, "https://t.me/vsemoionline_bot")
+        }
+
+        binding.tvContactEmail.setOnClickListener {
+            Utils.openUri(this, "mailto:vsemoionlinevpn@gmail.com")
         }
 
         prefillEmail()
@@ -230,7 +307,6 @@ class CabinetActivity : BaseActivity() {
         binding.btnCabinetRenew.isEnabled = !isBusy
         binding.btnCabinetAddMember.isEnabled = !isBusy
         binding.btnCabinetDistribute.isEnabled = !isBusy
-        binding.btnCabinetLogout.isEnabled = !isBusy
         binding.etCabinetEmail.isEnabled = !isBusy
         binding.etCabinetCode.isEnabled = !isBusy
         binding.etCabinetMemberName.isEnabled = !isBusy
@@ -429,6 +505,75 @@ class CabinetActivity : BaseActivity() {
         }
     }
 
+    private fun loadHistory(reset: Boolean = false) {
+        if (isLoadingHistory) return
+        isLoadingHistory = true
+        val cursor = if (reset) null else historyNextCursor
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val response = getJson(
+                    "/cabinet/api/history?filter=$historyFilter&limit=10" +
+                            if (cursor != null) "&cursor=$cursor" else ""
+                )
+                val page = parseHistoryPage(response.json)
+                withContext(Dispatchers.Main) {
+                    if (reset) {
+                        binding.llHistoryRows.removeAllViews()
+                    }
+                    historyNextCursor = if (page.nextCursor.isNullOrBlank()) null else page.nextCursor
+                    historyHasMore = page.hasMore
+                    renderHistoryItems(page.items)
+                    val totalShown = binding.llHistoryRows.childCount
+                    binding.tvHistoryCount.text = getString(R.string.vsm_cabinet_shown_count, totalShown)
+                    binding.tvHistoryCount.visibility = if (totalShown > 0) View.VISIBLE else View.GONE
+                    binding.btnHistoryLoadMore.visibility =
+                        if (historyHasMore) View.VISIBLE else View.GONE
+                    binding.layoutHistoryEmpty.visibility =
+                        if (page.items.isEmpty() && reset) View.VISIBLE else View.GONE
+                    binding.layoutHistoryTable.visibility =
+                        if (page.items.isEmpty() && reset) View.GONE else View.VISIBLE
+                    isLoadingHistory = false
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    isLoadingHistory = false
+                    showStatus(e.message ?: getString(R.string.vsm_cabinet_generic_error), StatusMode.ERROR)
+                }
+            }
+        }
+    }
+
+    private fun parseHistoryPage(json: JSONObject): CabinetHistoryPage {
+        val itemsArray = json.optJSONArray("items") ?: org.json.JSONArray()
+        val items = mutableListOf<CabinetHistoryEntry>()
+        for (i in 0 until itemsArray.length()) {
+            val entry = itemsArray.optJSONObject(i) ?: continue
+            items += CabinetHistoryEntry(
+                dateLabel = entry.optString("date_label"),
+                descriptionHtml = entry.optString("description_html"),
+                daysLabel = entry.optString("days_label"),
+                daysClass = entry.optString("days_class"),
+            )
+        }
+        return CabinetHistoryPage(
+            items = items,
+            nextCursor = json.optString("nextCursor").takeIf { it.isNotBlank() },
+            hasMore = json.optBoolean("hasMore", false),
+            filter = json.optString("filter", "payment"),
+        )
+    }
+
+    private fun setHistoryFilter(filter: String) {
+        if (historyFilter == filter) return
+        historyFilter = filter
+        historyNextCursor = null
+        binding.chipHistoryAll.isSelected = filter == "all"
+        binding.chipHistoryPayment.isSelected = filter == "payment"
+        binding.chipHistoryDistribution.isSelected = filter == "distribution"
+        loadHistory(reset = true)
+    }
+
     private fun parseMembers(family: JSONObject): List<CabinetMember> {
         val array = family.optJSONArray("members") ?: return emptyList()
         val result = mutableListOf<CabinetMember>()
@@ -476,9 +621,21 @@ class CabinetActivity : BaseActivity() {
             getColor(if (ownerDays > 0) R.color.vsm_sub_ok else R.color.vsm_sub_urgent)
         )
         binding.tvCabinetLastPayment.text = lastPaymentDate ?: getString(R.string.vsm_cabinet_no_payment_date)
-        binding.tvCabinetDepositTitle.text = getString(R.string.vsm_cabinet_distribution_title_format, depositDays)
-        binding.layoutCabinetDistribution.visibility = if (members.size > 1 && depositDays > 0) View.VISIBLE else View.GONE
-        binding.btnCabinetDistribute.visibility = if (members.size > 1 && depositDays > 0) View.VISIBLE else View.GONE
+        val memberDays = members.map { it.daysRemaining }
+        val totalFamilyDays = memberDays.sum() + depositDays
+        val evenBase = if (members.isNotEmpty()) totalFamilyDays / members.size else 0
+        val evenRem = if (members.isNotEmpty()) totalFamilyDays % members.size else 0
+        val needsRedistribution = members.size > 1 && members.indices.any { i ->
+            memberDays[i] != evenBase + if (i < evenRem) 1 else 0
+        }
+        if (depositDays > 0) {
+            binding.tvCabinetDepositTitle.text = getString(R.string.vsm_cabinet_distribution_title_format, depositDays)
+            binding.tvCabinetDepositBody.setText(R.string.vsm_cabinet_distribution_body)
+        } else {
+            binding.tvCabinetDepositTitle.setText(R.string.vsm_cabinet_distribution_title_rebalance)
+            binding.tvCabinetDepositBody.setText(R.string.vsm_cabinet_distribution_body_rebalance)
+        }
+        binding.layoutCabinetDistribution.visibility = if (needsRedistribution) View.VISIBLE else View.GONE
 
         binding.llCabinetMembers.removeAllViews()
         members.forEach { member ->
@@ -548,13 +705,16 @@ class CabinetActivity : BaseActivity() {
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                rightMargin = dp(10)
+                rightMargin = dp(8)
             }
         })
+
         nameRow.addView(buildIconButton(R.drawable.ic_edit_24dp, getString(R.string.vsm_cabinet_edit_name)) {
             showEditMemberDialog(member)
         }.apply {
-            layoutParams = LinearLayout.LayoutParams(dp(42), dp(42))
+            layoutParams = LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+                marginStart = dp(1)
+            }
         })
         header.addView(nameRow)
         header.addView(buildMemberControls(member))
@@ -590,6 +750,221 @@ class CabinetActivity : BaseActivity() {
             wrapper.getChildAt(0)?.bringToFront()
         }
         return wrapper
+    }
+
+    private fun renderHistoryItems(items: List<CabinetHistoryEntry>) {
+        val tableBody = binding.llHistoryRows ?: return
+        for (entry in items) {
+            tableBody.addView(buildHistoryRow(entry))
+        }
+    }
+
+    private fun buildHistoryRow(entry: CabinetHistoryEntry): View {
+        val wrapper = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
+        }
+
+        wrapper.addView(View(this).apply {
+            setBackgroundColor(getColor(R.color.vsm_border))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(1),
+            )
+        })
+
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
+        }
+
+        row.addView(TextView(this).apply {
+            text = entry.dateLabel
+            setTextColor(getColor(R.color.vsm_restore_card_body))
+            textSize = 13f
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.28f).apply {
+                rightMargin = dp(8)
+            }
+        })
+
+        row.addView(TextView(this).apply {
+            text = buildHistoryDescription(entry.descriptionHtml)
+            setTextColor(getColor(R.color.vsm_restore_card_title))
+            textSize = 13f
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.44f).apply {
+                rightMargin = dp(8)
+            }
+        })
+
+        row.addView(TextView(this).apply {
+            text = entry.daysLabel
+            val colorRes = when {
+                entry.daysClass.contains("positive") -> R.color.vsm_sub_ok
+                else -> R.color.vsm_restore_card_body
+            }
+            setTextColor(getColor(colorRes))
+            textSize = 13f
+            gravity = Gravity.END
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.18f)
+        })
+
+        wrapper.addView(row)
+        return wrapper
+    }
+
+    private fun decodeHtmlEntities(text: String): String {
+        return text
+            .replace("&rarr;", "→")
+            .replace("&nbsp;", " ")
+            .replace("&#39;", "'")
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace(Regex("<em>(.*?)</em>"), "$1")
+            .replace(Regex("<strong>(.*?)</strong>"), "$1")
+    }
+
+    private fun buildHistoryDescription(html: String): CharSequence {
+        val spannable = SpannableStringBuilder()
+        val regex = Regex("""<span class="(ev-\w+)">(.*?)</span>(.*)""")
+        val match = regex.find(html)
+
+        if (match != null) {
+            val cssClass = match.groupValues[1]
+            val label = decodeHtmlEntities(match.groupValues[2])
+            val rest = decodeHtmlEntities(match.groupValues[3])
+
+            val colorRes = when (cssClass) {
+                "ev-payment" -> R.color.vsm_sub_ok
+                "ev-allocate", "ev-distribute" -> R.color.vsm_link
+                "ev-rebalance" -> R.color.vsm_traffic_amber
+                "ev-neutral" -> R.color.vsm_restore_card_body
+                else -> R.color.vsm_restore_card_body
+            }
+
+            val labelSpan = SpannableStringBuilder(label)
+            labelSpan.setSpan(
+                ForegroundColorSpan(getColor(colorRes)),
+                0, label.length,
+                Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+            spannable.append(labelSpan)
+            spannable.append(rest)
+        } else {
+            spannable.append(decodeHtmlEntities(html))
+        }
+
+        return spannable
+    }
+
+    private fun populateDownloadOptions() {
+        val baseUrl = androidDownloadUrl()
+        val options = listOf(
+            DownloadOption(getString(R.string.vsm_cabinet_download_recommended), getString(R.string.vsm_cabinet_download_modern), "26,3 МБ", baseUrl),
+            DownloadOption(null, getString(R.string.vsm_cabinet_download_old), "26,6 МБ", "${baseUrl}/older-phones"),
+            DownloadOption(null, getString(R.string.vsm_cabinet_download_universal), "60,9 МБ", "${baseUrl}/universal"),
+        )
+
+        binding.llDownloadOptions.removeAllViews()
+        options.forEach { option ->
+            binding.llDownloadOptions.addView(buildDownloadOption(option.badge, option.name, option.size, option.url))
+        }
+    }
+
+    private fun buildDownloadOption(badge: String?, name: String, size: String, url: String): View {
+        val parentView = binding.llDownloadOptions
+        val isFirst = parentView.childCount == 0
+
+        return FrameLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = if (isFirst) dp(10) else dp(10)
+            }
+
+            addView(LinearLayout(this@CabinetActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setBackgroundResource(R.drawable.cabinet_inner_card_bg)
+                setPadding(
+                    dp(16),
+                    if (badge != null) dp(24) else dp(14),  // More top padding when badge exists
+                    dp(16),
+                    dp(14)
+                )
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    if (badge != null) {
+                        topMargin = dp(10)
+                    }
+                }
+
+                addView(LinearLayout(this@CabinetActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+
+                    addView(LinearLayout(this@CabinetActivity).apply {
+                        orientation = LinearLayout.VERTICAL
+                        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+
+                        addView(TextView(this@CabinetActivity).apply {
+                            text = name
+                            setTextColor(getColor(R.color.vsm_restore_card_title))
+                            textSize = 15f
+                            typeface = Typeface.DEFAULT_BOLD
+                        })
+                    })
+
+                    addView(TextView(this@CabinetActivity).apply {
+                        text = size
+                        setTextColor(getColor(R.color.vsm_restore_card_body))
+                        textSize = 12f
+                        layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                        ).apply { marginStart = dp(10) }
+                    })
+                })
+
+                addView(buildOutlineButton(R.string.vsm_cabinet_download_copy_link) {
+                    copyText(url)
+                }.apply {
+                    layoutParams = (layoutParams as LinearLayout.LayoutParams).apply {
+                        topMargin = dp(12)
+                    }
+                })
+            })
+
+            if (badge != null) {
+                addView(TextView(this@CabinetActivity).apply {
+                    text = badge
+                    setTextColor(getColor(R.color.vsm_sub_ok))
+                    textSize = 12f
+                    typeface = Typeface.DEFAULT_BOLD
+                    isAllCaps = true
+                    setBackgroundResource(R.drawable.cabinet_owner_badge_bg)
+                    setPadding(dp(18), dp(4), dp(18), dp(4))
+                    layoutParams = FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.WRAP_CONTENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT,
+                    ).apply {
+                        leftMargin = dp(18)
+                        gravity = Gravity.TOP or Gravity.LEFT
+                    }
+                })
+            }
+        }
     }
 
     private fun addActivationViews(card: LinearLayout, member: CabinetMember) {
@@ -636,7 +1011,7 @@ class CabinetActivity : BaseActivity() {
             setPadding(0, dp(16), 0, 0)
         })
         if (member.activationCode != null) {
-            activationBox.addView(buildCodeCopyRow(member.activationCode, member.activationRaw ?: member.activationCode))
+            activationBox.addView(buildCodeCopyRow(member.activationRaw ?: member.activationCode, member.activationRaw ?: member.activationCode))
         }
         if (member.activationUrl != null) {
             activationBox.addView(buildLinkCopyRow(member.activationUrl))
@@ -738,7 +1113,6 @@ class CabinetActivity : BaseActivity() {
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             )
-            addView(buildSymbolButton("-", canMoveDay) { moveDayToFewest(member) })
             addView(LinearLayout(this@CabinetActivity).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
@@ -760,6 +1134,7 @@ class CabinetActivity : BaseActivity() {
                     gravity = Gravity.CENTER
                 })
             })
+            addView(buildSymbolButton("-", canMoveDay) { moveDayToFewest(member) })
             addView(buildSymbolButton("+", true) { allocateDay(member) })
         }
     }
@@ -837,22 +1212,6 @@ class CabinetActivity : BaseActivity() {
         }
     }
 
-    private fun showEditMemberDialog(member: CabinetMember) {
-        val input = dialogInput(getString(R.string.vsm_cabinet_name_hint), InputType.TYPE_CLASS_TEXT).apply {
-            setText(member.displayName)
-            setSelection(text?.length ?: 0)
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle(R.string.vsm_cabinet_edit_name)
-            .setView(input)
-            .setNegativeButton(android.R.string.cancel, null)
-            .setPositiveButton(R.string.vsm_cabinet_save) { _, _ ->
-                updateMemberName(member, input.text?.toString()?.trim().orEmpty())
-            }
-            .show()
-    }
-
     private fun dialogInput(hint: String, type: Int): EditText {
         return EditText(this).apply {
             this.hint = hint
@@ -878,6 +1237,37 @@ class CabinetActivity : BaseActivity() {
                 binding.etCabinetMemberEmail.text?.clear()
             },
         )
+    }
+
+    private fun showMemberNameError(show: Boolean) {
+        binding.tvCabinetMemberNameError.visibility = if (show) View.VISIBLE else View.GONE
+        binding.etCabinetMemberName.background = if (show)
+            getDrawable(R.drawable.restore_input_error_bg)
+        else
+            getDrawable(R.drawable.restore_input_bg)
+    }
+
+    private fun showEditMemberDialog(member: CabinetMember) {
+        val view = layoutInflater.inflate(R.layout.dialog_edit_member_name, null)
+        val input = view.findViewById<EditText>(R.id.etEditMemberName)
+        input.setText(member.displayName)
+        input.setSelection(input.text?.length ?: 0)
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(view)
+            .create()
+
+        view.findViewById<Button>(R.id.btnEditMemberCancel).setOnClickListener {
+            dialog.dismiss()
+        }
+
+        view.findViewById<Button>(R.id.btnEditMemberSave).setOnClickListener {
+            updateMemberName(member, input.text?.toString()?.trim().orEmpty())
+            dialog.dismiss()
+        }
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
     }
 
     private fun updateMemberName(member: CabinetMember, displayName: String) {
@@ -932,18 +1322,29 @@ class CabinetActivity : BaseActivity() {
     }
 
     private fun confirmRemoveMember(member: CabinetMember) {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.vsm_cabinet_remove_member)
-            .setMessage(getString(R.string.vsm_cabinet_remove_confirm, member.displayName))
-            .setNegativeButton(android.R.string.cancel, null)
-            .setPositiveButton(R.string.vsm_cabinet_remove) { _, _ ->
-                mutateCabinet(
-                    path = "/cabinet/api/family/members/${member.id}/remove",
-                    body = JSONObject(),
-                    successMessage = getString(R.string.vsm_cabinet_member_removed),
-                )
-            }
-            .show()
+        val view = layoutInflater.inflate(R.layout.dialog_confirm_remove_member, null)
+        view.findViewById<TextView>(R.id.tvConfirmRemoveMessage).text =
+            getString(R.string.vsm_cabinet_remove_confirm, member.displayName)
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(view)
+            .create()
+
+        view.findViewById<Button>(R.id.btnConfirmRemoveCancel).setOnClickListener {
+            dialog.dismiss()
+        }
+
+        view.findViewById<Button>(R.id.btnConfirmRemoveConfirm).setOnClickListener {
+            mutateCabinet(
+                path = "/cabinet/api/family/members/${member.id}/remove",
+                body = JSONObject(),
+                successMessage = getString(R.string.vsm_cabinet_member_removed),
+            )
+            dialog.dismiss()
+        }
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
     }
 
     private fun mutateCabinet(

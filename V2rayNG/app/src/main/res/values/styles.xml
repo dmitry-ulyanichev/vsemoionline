@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="ChipHistoryFilter">
+        <item name="android:textSize">11sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/vsm_restore_card_body</item>
+        <item name="android:background">@drawable/chip_history_filter_bg</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:paddingStart">11dp</item>
+        <item name="android:paddingTop">7dp</item>
+        <item name="android:paddingEnd">11dp</item>
+        <item name="android:paddingBottom">7dp</item>
+    </style>
+</resources>
