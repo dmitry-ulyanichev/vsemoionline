@@ -1,5 +1,121 @@
 # VseMoiOnline: Implementation Plan
 
+## Updates (2026-05-05)
+
+### Google sign-in for the web cabinet
+
+Implemented in this session:
+
+- Added Google Identity Services as an optional cabinet login method.
+- Created a backend Google identity mapping table:
+  - `account_google_identities`
+  - stores stable Google `sub`
+  - links it to an existing `accounts.id`
+  - keeps the email observed at link time
+- Added `GOOGLE_OAUTH_CLIENT_ID` backend configuration.
+- Added `google-auth-library` to `client-backend`.
+- Added `POST /cabinet/google`:
+  - verifies Google ID tokens server-side
+  - validates token issuer/audience
+  - uses Google `sub` as the stable identity key
+  - creates the same regular `cabinet_session` cookie as OTP login
+- Google login is intentionally a cabinet-login option, not a payment prerequisite.
+
+Important identity rules:
+
+- Google `sub` is the durable identity; email is useful but not the primary key.
+- First-time web Google login can auto-link only when Google is authoritative for the email:
+  - Gmail / Googlemail
+  - Google Workspace with hosted-domain claim
+- For non-Google-hosted external emails, the user should still enter through OTP first and then link Google from inside the cabinet.
+
+### Cabinet Google linking UX
+
+Implemented behavior:
+
+- Authenticated cabinet users without a linked Google account see a Google-link prompt directly under the cabinet header, above the subscription section.
+- The prompt explains that linking Google allows login without an email code.
+- The prompt has `Не сейчас`; dismissal is stored client-side in `localStorage`.
+- Once Google is linked, the prompt disappears entirely instead of showing a persistent “already linked” card.
+- Added `POST /cabinet/google/link`:
+  - requires an existing cabinet session
+  - verifies the Google credential
+  - links the selected Google account to the current cabinet account
+  - rejects if that Google identity is already linked to a different cabinet
+
+### Post-payment email review with Google
+
+Previous product intent:
+
+- Post-payment email review exists because checkout accepts an unverified email.
+- The user may have mistyped the address or entered an address that does not exist.
+- The review step exists to ensure the paid user has a durable way to regain cabinet access later.
+
+Updated behavior:
+
+- The post-payment gate still supports:
+  - `Email верный`
+  - `Исправить email`
+  - Google account selection
+- Google confirmation no longer means “prove the typed payment email matches Google.”
+- It now means: “Use the selected Google account as the future cabinet login identity.”
+- If the selected Google account email differs from the payment email, the account email is updated to the Google email.
+- The selected Google identity is linked to the paid account for future cabinet login.
+- `email_reviewed_at` is marked after successful Google confirmation.
+
+Safety rules:
+
+- Google post-payment confirmation requires a Google-authoritative email:
+  - Gmail / Googlemail
+  - Google Workspace with hosted-domain claim
+- If the selected Google email already belongs to another account, the system reuses the same safe merge behavior as manual email correction:
+  - credits paid days to the existing account
+  - reassigns the payment
+  - reassigns the post-payment session
+  - deletes the temporary no-device account
+- If the selected Google identity is already linked to a conflicting cabinet, the flow rejects before changing the paid account.
+
+### Files touched
+
+Backend:
+
+- `client-backend/src/routes/cabinet.js`
+- `client-backend/package.json`
+- `client-backend/package-lock.json`
+- `client-backend/migrations/20260505120000-google-cabinet-identities.js`
+- `infra/swarm/stack.yml`
+
+Configuration:
+
+- Google OAuth web client:
+  - Authorized JavaScript origins:
+    - `https://vsemoi.online`
+    - `https://vmonl.store`
+  - Authorized redirect URIs:
+    - `https://vsemoi.online/cabinet/google`
+    - `https://vmonl.store/cabinet/google`
+- Runtime env:
+  - `GOOGLE_OAUTH_CLIENT_ID`
+
+Validation:
+
+- Backend syntax check: `node --check client-backend/src/routes/cabinet.js` passed.
+- Backend tests from `client-backend`: `npm test` passed.
+- Live cabinet Google login tested successfully after OTP login and after logout/re-login.
+- Live post-payment Google flow was adjusted after testing showed the first implementation only matched existing emails; current behavior treats the selected Google account as the durable identity.
+
+Next sensible steps:
+
+- Re-test post-payment Google confirmation with:
+  - same Gmail as typed checkout email
+  - different Gmail than typed checkout email
+  - Google account already linked to another cabinet
+- Consider adding route-level backend regression tests for:
+  - `/cabinet/google`
+  - `/cabinet/google/link`
+  - `/cabinet/post-payment/confirm-google`
+- Consider exposing Google-linked status in native Android cabinet API payloads later if the native cabinet should surface account-security status.
+
 ## Updates (2026-05-02)
 
 ### Native Android cabinet — current state

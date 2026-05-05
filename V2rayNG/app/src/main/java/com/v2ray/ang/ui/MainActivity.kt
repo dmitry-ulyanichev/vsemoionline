@@ -1123,6 +1123,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
             return
         }
         lifecycleScope.launch(Dispatchers.IO) {
+            val storedVlessUri = prefs.getString(PREF_VLESS_URI, null)
             val success = try {
                 runProvisionFallbackChain()
             } catch (e: PaidSessionActiveException) {
@@ -1148,9 +1149,33 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
                         toast(refreshedBlock)
                     }
                 } else {
-                    finishConnectAttempt()
-                    Log.e(AppConfig.TAG, "VseMoiOnline: Pre-connect provision failed — not starting VPN")
-                    showProvisioningFailedDialog()
+                    val cachedBlock = connectionBlockedReason()
+                    when {
+                        cachedBlock != null -> {
+                            finishConnectAttempt()
+                            toast(cachedBlock)
+                        }
+                        storedVlessUri.isNullOrBlank() -> {
+                            finishConnectAttempt()
+                            Log.e(AppConfig.TAG, "VseMoiOnline: Pre-connect provision failed and no cached config is available")
+                            showProvisioningFailedDialog()
+                        }
+                        else -> {
+                            Log.w(AppConfig.TAG, "VseMoiOnline: Pre-connect provision failed — starting with cached config")
+                            val selectedServer = MmkvManager.getSelectServer()
+                            if (selectedServer.isNullOrEmpty()) {
+                                val imported = importProvisionedConfigSilentlyAwait(storedVlessUri)
+                                if (imported) {
+                                    startV2Ray()
+                                } else {
+                                    finishConnectAttempt()
+                                    showProvisioningFailedDialog()
+                                }
+                            } else {
+                                startV2Ray()
+                            }
+                        }
+                    }
                 }
             }
         }

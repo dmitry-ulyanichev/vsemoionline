@@ -2,6 +2,16 @@
 
 ---
 
+## Updates (2026-05-05) — Fallback to cached configuration in case backend is unavailable
+
+For a known device, if all provisioning URLs fail, the app now:
+
+- checks local block reasons first, like expired paid days or exhausted traffic
+- uses the stored vless_uri if available
+- re-imports the cached config if the selected server was missing
+- starts the VPN instead of showing “Could not connect”
+- still blocks true policy errors like 409 paid_session_active
+
 ## Updates (2026-05-02) — Native Android cabinet and trusted-device cabinet session
 
 ### Android: native cabinet screen
