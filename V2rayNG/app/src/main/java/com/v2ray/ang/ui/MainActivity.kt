@@ -25,6 +25,7 @@ import android.view.animation.AlphaAnimation
 import android.view.animation.Animation
 import android.widget.EditText
 import android.widget.BaseAdapter
+import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.view.ViewGroup
@@ -88,6 +89,8 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         private const val PREF_THROTTLE_MBPS = "throttle_mbps"
         private const val PREF_CABINET_URL = "cabinet_url"
         private const val PREF_FAMILY_ROLE = "family_role"
+        private const val PREF_PRODUCT_PLAN_CODE = "product_plan_code"
+        private const val PREF_DURATION_CODE = "duration_code"
         private const val PREF_LAST_STATUS_POLL_MS = "last_status_poll_ms"
         private const val PREF_SERVER_ZONE = "server_zone"
         private const val PREF_SERVER_REGION = "server_region"
@@ -99,6 +102,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         // Two-cycle provisioning timeouts for better UX
         private const val PROVISION_TIMEOUT_QUICK_MS = 3000  // 3 seconds - Cycle 1: quick scan
         private const val PROVISION_TIMEOUT_PATIENT_MS = 10000 // 10 seconds - Cycle 2: patient retry
+        private const val PRE_CONNECT_PROVISION_TIMEOUT_MS = 2000 // Known devices: give online refresh one short chance before cached connect
 
         private const val PRIMARY_PROVISION_URL = "https://vmonl.store/provision"
 
@@ -830,7 +834,11 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
      * @param timeoutMs Timeout in milliseconds
      * @return true if successful, false otherwise
      */
-    private suspend fun fetchAndImportConfig(provisionUrl: String, timeoutMs: Int): Boolean {
+    private suspend fun fetchAndImportConfig(
+        provisionUrl: String,
+        timeoutMs: Int,
+        pollStatusAfterImport: Boolean = true
+    ): Boolean {
         return try {
             val deviceFingerprint = getOrCreateDeviceId()
             val androidId = getAndroidId()
@@ -864,6 +872,11 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
                 val cabinetUrl = if (json.isNull("cabinet_url")) null else json.getString("cabinet_url")
 
                 saveProvisionData(xrayUuid, plan, vlessUri, provisionUrl, cabinetUrl)
+                if (!json.isNull("days_remaining")) {
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                        .putInt(PREF_PAID_DAYS_REMAINING, json.optInt("days_remaining", 0))
+                        .apply()
+                }
                 applyClientRulesFromProvision(json)
                 val provZone   = if (json.isNull("zone"))   null else json.optString("zone")
                 val provRegion = if (json.isNull("region")) null else json.optString("region")
@@ -877,13 +890,15 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
                 Log.i(AppConfig.TAG, "VseMoiOnline: Provisioned — plan=$plan, importing config")
 
                 // Immediately fetch status so days_remaining/traffic are populated before UI renders
-                try {
-                    pollStatus(xrayUuid)
-                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                        .putLong(PREF_LAST_STATUS_POLL_MS, System.currentTimeMillis())
-                        .apply()
-                } catch (e: Exception) {
-                    Log.w(AppConfig.TAG, "VseMoiOnline: Post-provision status poll failed: ${e.message}")
+                if (pollStatusAfterImport) {
+                    try {
+                        pollStatus(xrayUuid)
+                        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                            .putLong(PREF_LAST_STATUS_POLL_MS, System.currentTimeMillis())
+                            .apply()
+                    } catch (e: Exception) {
+                        Log.w(AppConfig.TAG, "VseMoiOnline: Post-provision status poll failed: ${e.message}")
+                    }
                 }
 
                 val imported = withContext(Dispatchers.Main) {
@@ -982,6 +997,14 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
             .putFloat(PREF_THROTTLE_MBPS, throttleMbps)
         if (!json.isNull("cabinet_url")) editor.putString(PREF_CABINET_URL, json.getString("cabinet_url"))
         if (!json.isNull("family_role")) editor.putString(PREF_FAMILY_ROLE, json.getString("family_role"))
+        json.optJSONObject("product_plan")
+            ?.optString("code")
+            ?.takeIf { it.isNotBlank() }
+            ?.let { editor.putString(PREF_PRODUCT_PLAN_CODE, it) }
+        json.optString("duration_code")
+            .ifBlank { json.optString("current_duration_code") }
+            .takeIf { it.isNotBlank() }
+            ?.let { editor.putString(PREF_DURATION_CODE, it) }
         editor.apply()
 
         withContext(Dispatchers.Main) {
@@ -1087,6 +1110,49 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         refreshFabIdleAppearance()
     }
 
+    private suspend fun tryFastProvisionBeforeCachedConnect(): Boolean {
+        val urlsToTry = mutableListOf<String>()
+        getLastWorkingProvisionUrl()?.let { urlsToTry.add(it) }
+        urlsToTry.add(PRIMARY_PROVISION_URL)
+
+        for (provisionUrl in urlsToTry.distinct()) {
+            try {
+                Log.i(AppConfig.TAG, "VseMoiOnline: Pre-connect fast provision attempt: $provisionUrl")
+                val success = fetchAndImportConfig(
+                    provisionUrl,
+                    PRE_CONNECT_PROVISION_TIMEOUT_MS,
+                    pollStatusAfterImport = false
+                )
+                if (success) {
+                    saveLastWorkingProvisionUrl(provisionUrl)
+                    Log.i(AppConfig.TAG, "VseMoiOnline: Pre-connect fast provision succeeded")
+                    return true
+                }
+            } catch (e: PaidSessionActiveException) {
+                throw e
+            } catch (e: NoServersAvailableException) {
+                Log.w(AppConfig.TAG, "VseMoiOnline: Pre-connect fast provision reported no servers, using cached config if possible")
+                return false
+            } catch (e: Exception) {
+                Log.w(AppConfig.TAG, "VseMoiOnline: Pre-connect fast provision failed: ${e.message}")
+            }
+        }
+        return false
+    }
+
+    private suspend fun restoreCachedConfigForConnect(storedVlessUri: String): Boolean {
+        val selectedServer = MmkvManager.getSelectServer()
+        val hasServerList = MmkvManager.decodeServerList().isNotEmpty()
+        val ready = if (selectedServer.isNullOrEmpty() || !hasServerList) {
+            importProvisionedConfigSilentlyAwait(storedVlessUri)
+        } else {
+            mainViewModel.reloadServerList()
+            true
+        }
+        if (ready) updateServerRow()
+        return ready
+    }
+
     /**
      * VseMoiOnline: Re-provision before connecting to ensure the UUID is registered with Xray.
      * Handles mid-session Xray restarts: user notices traffic stopped → disconnects → taps connect
@@ -1124,6 +1190,38 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         }
         lifecycleScope.launch(Dispatchers.IO) {
             val storedVlessUri = prefs.getString(PREF_VLESS_URI, null)
+            if (!storedVlessUri.isNullOrBlank()) {
+                try {
+                    val quickSuccess = tryFastProvisionBeforeCachedConnect()
+                    withContext(Dispatchers.Main) {
+                        val blockReason = connectionBlockedReason()
+                        when {
+                            blockReason != null -> {
+                                finishConnectAttempt()
+                                toast(blockReason)
+                            }
+                            quickSuccess -> {
+                                startV2Ray()
+                            }
+                            restoreCachedConfigForConnect(storedVlessUri) -> {
+                                Log.w(AppConfig.TAG, "VseMoiOnline: Pre-connect online refresh failed quickly — starting with cached config")
+                                startV2Ray()
+                            }
+                            else -> {
+                                finishConnectAttempt()
+                                showProvisioningFailedDialog()
+                            }
+                        }
+                    }
+                } catch (e: PaidSessionActiveException) {
+                    withContext(Dispatchers.Main) {
+                        finishConnectAttempt()
+                        toastError("VPN уже активно на другом устройстве")
+                    }
+                }
+                return@launch
+            }
+
             val success = try {
                 runProvisionFallbackChain()
             } catch (e: PaidSessionActiveException) {
@@ -1166,12 +1264,14 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
                             if (selectedServer.isNullOrEmpty()) {
                                 val imported = importProvisionedConfigSilentlyAwait(storedVlessUri)
                                 if (imported) {
+                                    updateServerRow()
                                     startV2Ray()
                                 } else {
                                     finishConnectAttempt()
                                     showProvisioningFailedDialog()
                                 }
                             } else {
+                                updateServerRow()
                                 startV2Ray()
                             }
                         }
@@ -1230,7 +1330,10 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
             if (storedVlessUri != null) {
                 Log.w(AppConfig.TAG, "VseMoiOnline: Found ${serverList.size} configs, expected 1 — removing stale entries")
                 mainViewModel.removeAllServer()
-                importProvisionedConfigSilently(storedVlessUri)
+                lifecycleScope.launch {
+                    val imported = importProvisionedConfigSilentlyAwait(storedVlessUri)
+                    if (imported) updateServerRow()
+                }
                 return
             }
             mainViewModel.removeAllServer()
@@ -1258,7 +1361,12 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
             // Within rate-limit window — re-import cached config into MMKV if it was cleared.
             if (serverList.isEmpty()) {
                 Log.i(AppConfig.TAG, "VseMoiOnline: Within poll interval, re-importing stored config")
-                importProvisionedConfigSilently(storedVlessUri)
+                lifecycleScope.launch {
+                    val imported = importProvisionedConfigSilentlyAwait(storedVlessUri)
+                    if (imported) updateServerRow()
+                }
+            } else {
+                updateServerRow()
             }
             return
         }
@@ -1268,8 +1376,6 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
         }
 
         val provisionUrl = prefs.getString(PREF_LAST_WORKING_URL, null) ?: PRIMARY_PROVISION_URL
-        binding.tvServerFlag.text = regionToFlag(null)
-        binding.tvServerName.text = "—"
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 Log.i(AppConfig.TAG, "VseMoiOnline: App-open re-provision from $provisionUrl")
@@ -1288,8 +1394,19 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
             val fallbackSuccess = runProvisionFallbackChain()
             if (!fallbackSuccess) {
                 Log.w(AppConfig.TAG, "VseMoiOnline: Re-provision failed, using cached config")
-                if (serverList.isEmpty()) {
-                    withContext(Dispatchers.Main) { importProvisionedConfigSilently(storedVlessUri) }
+                withContext(Dispatchers.Main) {
+                    val restored = if (serverList.isEmpty()) {
+                        importProvisionedConfigSilentlyAwait(storedVlessUri)
+                    } else {
+                        mainViewModel.reloadServerList()
+                        true
+                    }
+                    if (restored) {
+                        updateSubscriptionHeader()
+                        updateSubBlock()
+                        updateServerRow()
+                        refreshFabIdleAppearance()
+                    }
                 }
             }
         }
@@ -1818,12 +1935,7 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
                     popup.dismiss()
                     if (item.region == currentRegion) return@setOnItemClickListener
                     if (plan != "paid") {
-                        AlertDialog.Builder(this@MainActivity)
-                            .setTitle(R.string.vsm_server_dialog_title)
-                            .setMessage(R.string.vsm_server_dialog_body)
-                            .setNegativeButton(R.string.vsm_server_dialog_cancel, null)
-                            .setPositiveButton(R.string.vsm_server_dialog_cta) { _, _ -> openPaymentUrl() }
-                            .show()
+                        showPaidServerRequiredDialog()
                     } else {
                         switchZone(item.region, item.zone)
                     }
@@ -1837,6 +1949,25 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
                 }
             }
         }
+    }
+
+    private fun showPaidServerRequiredDialog() {
+        val view = layoutInflater.inflate(R.layout.dialog_paid_server_required, null)
+        val dialog = AlertDialog.Builder(this)
+            .setView(view)
+            .create()
+
+        view.findViewById<Button>(R.id.btnPaidServerCancel).setOnClickListener {
+            dialog.dismiss()
+        }
+
+        view.findViewById<Button>(R.id.btnPaidServerPay).setOnClickListener {
+            dialog.dismiss()
+            openPaymentUrl()
+        }
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
     }
 
     private suspend fun fetchZones(): List<ZoneItem> {
@@ -2081,7 +2212,18 @@ class MainActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedList
     private fun updateServerRow() {
         val prefs  = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         val region = prefs.getString(PREF_SERVER_REGION, null)
-        val zone   = prefs.getString(PREF_SERVER_ZONE, null) ?: "—"
+        val storedZone = prefs.getString(PREF_SERVER_ZONE, null)
+        val fallbackProfile = if (storedZone.isNullOrBlank()) {
+            val selectedGuid = MmkvManager.getSelectServer()
+            selectedGuid?.let { MmkvManager.decodeServerConfig(it) }
+                ?: MmkvManager.decodeServerList().firstOrNull()?.let { MmkvManager.decodeServerConfig(it) }
+        } else {
+            null
+        }
+        val zone = storedZone?.takeIf { it.isNotBlank() }
+            ?: fallbackProfile?.remarks?.takeIf { it.isNotBlank() }
+            ?: fallbackProfile?.server?.takeIf { it.isNotBlank() }
+            ?: "—"
         binding.tvServerFlag.text = regionToFlag(region)
         binding.tvServerName.text = zone
 

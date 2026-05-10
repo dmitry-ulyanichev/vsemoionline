@@ -1,5 +1,279 @@
 # VseMoiOnline: Implementation Plan
 
+## Updates (2026-05-10)
+
+### Product-plan traffic caps, current-month usage, and plan-tab cleanup
+
+This session completed the missing traffic-limit wiring for the package-based paid plans in `vsemoionline-backend`.
+
+Backend traffic entitlement changes:
+
+- Centralized product-plan traffic cap metadata in `client-backend/src/lib/subscriptions.js`:
+  - `personal`: 125 GB/month (`traffic_cap_mb = 125000`)
+  - `family`: 500 GB/month (`traffic_cap_mb = 500000`)
+  - `all_mine`: 2 TB/month (`traffic_cap_mb = 2000000`)
+- Extended family/device entitlement context in `client-backend/src/lib/families.js` so device status calls can see:
+  - `family_id`
+  - `family_owner_account_id`
+  - `product_plan_code`
+- Updated `GET /status/:xray_uuid` in `client-backend/src/routes/status.js`:
+  - paid users now receive `traffic_cap_mb` from the family product plan instead of the old `PAID_TIER_TRAFFIC_CAP_MB` fallback
+  - free users still use `FREE_TIER_TRAFFIC_CAP_MB`
+  - current-month usage is read from `device_traffic_ledger` for the UTC calendar month
+  - paid family/package usage is shared across active family member devices
+  - the live unsaved Xray delta from the currently assigned VPS is added where it is safe to do so
+  - the response now includes `traffic_period_start`, `traffic_period_end`, `traffic_cap_source`, and `product_plan` metadata
+- This means the Android app can keep reading `traffic_cap_mb` from `/status/:xray_uuid`; no native change is required for the new 125/500/2000 GB limits as long as the app already consumes that field.
+
+Cabinet/API changes:
+
+- Updated `client-backend/src/routes/cabinet.js` so the cabinet loads current-month paid traffic usage for the family package.
+- `GET /cabinet/api/family` now returns `product_plan` with traffic usage fields:
+  - `traffic_used_mb`
+  - `traffic_remaining_mb`
+  - `traffic_used_label`
+  - `traffic_remaining_label`
+  - `traffic_used_pct`
+  - `traffic_period_start` / `traffic_period_end`
+- The web cabinet subscription card now shows both:
+  - device slot usage
+  - monthly traffic usage
+
+Public website/payment UI changes:
+
+- `website/index.html` and `website/pay.html` plan tabs now show compact package specs:
+  - `до 2 устройств` / `125 ГБ/мес`
+  - `до 5 устройств` / `500 ГБ/мес`
+  - `до 10 устройств` / `2 ТБ/мес`
+- Removed the separate `pricingPlanMeta` line from `index.html`.
+- Removed the `#pricingPlanTabs` styling/JS dependency; the index pricing tabs now use `.pricing-plan-tabs`.
+- Desktop index pricing tabs render in one row with centered compact specs.
+- Desktop checkout tabs in `pay.html` render as three-line cards with centered text.
+- Mobile index tabs now match the mobile checkout tab style.
+- `style.css` cache key was bumped to `style.css?v=20260510-plan-tabs-v3`.
+
+Docs/testing notes updated in `vsemoionline-backend`:
+
+- `TESTING.md` now says product-plan-specific traffic caps are wired for paid users.
+- `client-backend/docs/family-model-phase3.md` now reflects the current-month family/device ledger behavior and product-plan cap source.
+
+Validation:
+
+- `client-backend`: `npm test` passed, 22 tests.
+- Syntax checks passed for the changed backend JS files.
+- Browser smoke tests with mocked `/api/public/plans` verified index/pay tabs on desktop and mobile:
+  - no horizontal overflow
+  - index desktop tabs stay in one row
+  - pay desktop tabs are centered
+  - index mobile tabs match pay mobile styling
+
+Known follow-ups:
+
+- Manually test production `/status/:xray_uuid` for one account in each paid package and confirm Android displays 125/500/2000 GB caps.
+- Manually compare current-month family usage in cabinet against `device_traffic_ledger` rows after health-monitor records fresh traffic deltas.
+- If production has historical May traffic before `device_traffic_ledger`, decide whether to backfill package usage for the current billing month or accept that only ledger-recorded usage is counted.
+
+
+
+## Updates (2026-05-09)
+
+### Package-based paid plans, device slots, and pricing cleanup
+
+This session changed the commercial model from per-member day redistribution toward package-based device slots with shared subscription days and shared traffic caps.
+
+New paid product groups:
+
+- `Личный` / `personal`: 2 devices, 125 GB/month.
+- `Моя Семья` / `family`: 5 devices, 500 GB/month.
+- `Все Мои` / `all_mine`: 10 devices, 2 TB/month.
+
+Key product decisions:
+
+- The owner manages visible device slots, not hidden member tokens.
+- Days and traffic are shared by the package cohort.
+- Adding/removing devices should not redistribute or mint days.
+- Token reissue is no longer part of the intended UX; if a device is lost, the user adds a new visible device/slot.
+- If a plan is full, adding more devices requires upgrading to the next package.
+- Package upgrade prorates remaining paid days by price ratio, so the user keeps value but receives fewer days on the larger package.
+- Emancipation remains supported: a non-owner can pay for themselves later and become a standalone account/family.
+
+Backend/cabinet changes made in `vsemoionline-backend`:
+
+- Added `families.product_plan_code` through migration:
+  - `client-backend/migrations/20260509120000-family-product-plan.js`
+- Updated web cabinet package state:
+  - `client-backend/src/routes/cabinet.js`
+  - `GET /cabinet/api/family` now returns `product_plan`.
+  - `POST /cabinet/api/family/members` blocks new devices when slots are full.
+  - `POST /cabinet/api/family/product-plan` upgrades package and prorates active member paid-until dates.
+  - Cabinet copy now talks about devices/slots rather than day distribution.
+  - Reissue controls were removed from the owner UI.
+- Fixed a serious accounting bug:
+  - deleting a device/member no longer returns its remaining days to the owner/deposit.
+  - deletion frees the slot and discards that member allocation.
+- New members inherit the owner/current cohort paid-until date instead of requiring manual day allocation.
+
+Payment/catalog changes made in `vsemoionline-backend`:
+
+- Replaced public duration-only plan codes with package-duration SKUs:
+  - `personal_1m`, `personal_3m`, `personal_6m`, `personal_12m`
+  - `family_1m`, `family_3m`, `family_6m`, `family_12m`
+  - `all_mine_1m`, `all_mine_3m`, `all_mine_6m`, `all_mine_12m`
+- Default RUB prices:
+  - `Личный`: 99 / 279 / 499 / 899 RUB
+  - `Моя Семья`: 199 / 549 / 999 / 1790 RUB
+  - `Все Мои`: 399 / 1090 / 1990 / 3490 RUB
+- Legacy `1m`, `3m`, `6m`, `12m` codes still resolve as personal plans for compatibility.
+- Payment confirmation now promotes the account's family package when a `family_*` or `all_mine_*` plan is bought.
+- Admin payment price control remains the source for runtime overrides:
+  - `https://vsemoi.online/admin.html#payments`
+  - the admin price filter now exposes all 12 package-duration SKUs.
+- Payment page groups plans by product package instead of showing one flat list.
+
+Android cabinet changes made in `vsemoionline-android`:
+
+- `V2rayNG/app/src/main/java/com/v2ray/ang/ui/CabinetActivity.kt`
+  - reads `product_plan` from `/cabinet/api/family`
+  - shows package/device-slot status
+  - hides old day-distribution controls
+  - removes reissue action from member/device rows
+  - labels rows as primary device / device slot
+- `V2rayNG/app/src/main/res/values/strings.xml`
+  - cabinet copy changed from family-member/day language toward device/slot language.
+
+Public website changes made in `vsemoionline-backend/website`:
+
+- `index.html` and `pay.html` now show only `Личный` plans by default.
+- Compact pills switch to `Моя Семья` and `Все Мои`.
+- Query preselect still works: for example `pay.html?plan=family_3m` opens the family group.
+- `style.css` was versioned in the HTML as `style.css?v=20260509-plan-tabs` to bypass Android Chrome cache.
+- Plan pills/cards were made non-selectable to reduce Android Chrome's "Tap to see search results" bottom sheet when tapping prices.
+
+Validation:
+
+- `client-backend`: `npm test` passed, 22 tests.
+- Android: `./gradlew :app:compilePlaystoreDebugKotlin` passed after the native cabinet changes.
+- Browser smoke test with mocked `/api/public/plans` verified:
+  - no mobile horizontal overflow
+  - `Личный` active by default
+  - only 4 personal rows/options shown initially
+  - package pills render and switch groups.
+
+Known follow-ups:
+
+- Manually test production cabinet:
+  - full personal plan blocks the 3rd device until upgrade
+  - upgrade to family prorates days as expected
+  - deletion frees a slot without changing account days upward
+  - newly added device inherits the cohort paid-until date
+- Manually test production payment:
+  - buying `family_*` or `all_mine_*` promotes the package in cabinet
+  - admin price overrides still affect proration and checkout
+  - old links with `?plan=1m` / old app plan codes still land safely on personal plans.
+- Consider updating terms/refund/legal pricing tables, which may still assume the older duration-only or 250 GB paid plan language.
+- Decide whether the native Android payment screen should also group package pills instead of listing all package-duration SKUs.
+- After deploying static pages, verify Android Chrome receives the versioned stylesheet; if not, clear site data for `vsemoi.online`.
+
+## Updates (2026-05-07)
+
+### Backend traffic accounting, provider WAN usage, and scaling safety
+
+Investigated and locally implemented backend/orchestrator fixes for the VPN server provisioning and usage-stat anomalies.
+
+Production timeline established:
+
+- Amsterdam (EU, 103.13.210.245) was provisioned at 2026-05-06 22:32:17 UTC.
+- The trigger was not real traffic pressure. health-monitor published server.unreachable for EU-FR at 2026-05-06 22:29:08 UTC after TCP probe failures.
+- EU-FR recovered at 2026-05-06 22:30:03 UTC, but orchestrator had already started Kamatera provisioning.
+- Current behavior was therefore too eager: a short one-server-pool outage could buy a new VPS.
+
+Traffic investigation findings:
+
+- May 6 and May 7 admin traffic spikes were inconsistent with Kamatera NIC/billing numbers and live Xray per-user counters.
+- Root risk: production used one in-memory aggregate per-server Xray snapshot. If the set of readable Xray users changed or counters appeared to go backwards, the checker could treat cumulative Xray traffic as fresh traffic.
+- Xray user traffic is useful for product/user analytics, but it is not the billing source of truth for Kamatera 5 TB monthly traffic caps.
+- Kamatera billing CSV (/billing/{year}/{month}/self) exposes monthly provider WAN traffic per Service ID via rows where Service Type = Network and Unit Size = Traffic in GB.
+
+Local backend changes made in vsemoionline-backend:
+
+- Added persisted per-user Xray traffic snapshots:
+  - client-backend/migrations/20260507110000-xray-traffic-snapshots.js
+  - health-monitor/src/lib/traffic-delta.js
+- Hardened Xray traffic collection:
+  - per-user deltas instead of one aggregate server delta
+  - transient gRPC errors preserve previous snapshots
+  - missing uplink/downlink direction is treated as zero for that direction
+  - traffic-check run lock prevents overlapping poll runs
+  - large deltas are logged at warn level
+- Added daily VPN activity metrics:
+  - client-backend/migrations/20260507113000-vpn-daily-active-usage.js
+  - devices/accounts that actually transferred VPN bytes during the UTC day
+  - peak traffic-active devices per sample
+- Added provider WAN traffic storage and Kamatera billing sync:
+  - client-backend/migrations/20260507120000-provider-traffic-usage.js
+  - health-monitor/src/lib/kamatera-billing.js
+  - hourly billing CSV sync by default
+  - servers.provider_traffic_used_mb, provider_traffic_updated_at, provider_traffic_source
+- Updated cap/scaling calculations to prefer provider WAN usage when available:
+  - health-monitor/src/lib/traffic-checker.js
+  - orchestrator/src/lib/scaling.js
+- Added unreachable provisioning grace period:
+  - UNREACHABLE_PROVISION_GRACE_MS, default 10 minutes
+  - server.unreachable now schedules delayed capacity assessment instead of provisioning immediately
+- Updated health checks to probe each server configured free_port.
+- Updated admin usage API/UI to expose clearer VPN activity and WAN-vs-Xray cap source labels.
+- Updated infra/swarm/stack.yml so health-monitor receives Kamatera API credentials and KAMATERA_BILLING_SYNC_INTERVAL_MS.
+
+Validation:
+
+- health-monitor: npm test passed, 8 tests.
+- client-backend: npm test passed, 22 tests.
+- Syntax checks passed for touched health-monitor/orchestrator/admin modules.
+
+Additional production follow-up completed in the same traffic-accounting work:
+
+- Added host NIC rx_bytes + tx_bytes sampling on each Xray VPS through the tc-agent:
+  - xray-agent/agent.js exposes authenticated GET /wan-counters
+  - health-monitor/src/lib/host-wan-sampler.js samples each server tc_agent_url
+  - client-backend/migrations/20260507130000-host-wan-traffic-sampling.js stores:
+    - server_wan_counter_snapshots
+    - usage_daily_totals.wan_traffic_mb
+    - usage_daily_server_stats.wan_traffic_mb
+  - health-monitor records daily WAN deltas from host NIC counters.
+- Updated deployed tc-agent on active VPSes and enabled HOST_WAN_SAMPLER_ENABLED=true in health-monitor.
+- Verified production WAN sampling:
+  - Frankfurt server 22 recorded daily host NIC WAN traffic.
+  - Amsterdam server 23 recorded daily host NIC WAN traffic.
+  - Host WAN traffic now appears separately from Xray/user traffic in the admin usage data.
+- Fixed admin chart label behavior where a zero-user month could show "VPN users, max 1" because the rendering guard value was displayed.
+- Diagnosed why daily active VPN users stayed at zero:
+  - server 22 had assigned devices and fresh Xray per-user snapshots.
+  - Xray counters were nonzero, but usage_daily_device_traffic stayed empty while aggregate traffic_mb increased.
+  - recordDailyDeviceTraffic was patched to write device rows and rollups as separate parameterized statements inside a transaction.
+- Verified after deploy that daily device activity started populating:
+  - server 22 had usage_daily_device_traffic rows.
+  - usage_daily_server_stats.vpn_active_devices and peak_vpn_active_devices_sample updated from 0 to active sampled devices.
+
+Updated validation:
+
+- health-monitor: npm test passed, 12 tests.
+- health-monitor/src/lib/usage-stats.js syntax check passed.
+
+Current interpretation of admin usage metrics:
+
+- Host NIC WAN traffic is the near-real-time daily traffic source and best day-level proxy for Kamatera billable traffic.
+- Kamatera billing CSV remains the monthly provider source of truth for traffic caps.
+- Xray per-user traffic remains useful for product analytics and for daily active VPN devices/accounts.
+- "VPN users" in the current chart updates only after health-monitor observes positive per-device Xray byte deltas and the admin page refreshes. A 5-minute polling delay is normal.
+
+Outstanding follow-ups:
+
+- Align May 1-7 usage rows in the production DB with actual Kamatera numbers now that reliable WAN/provider accounting is available.
+- Add a second chart line for cumulative daily VPN users, separate from the current sampled/active VPN-user signal.
+- Decide whether to add a true live-concurrency sampler later. Xray byte deltas show devices/accounts that transferred traffic during a poll interval; they are not exact live concurrent connections.
+- Manually test admin.html after each deploy to confirm reliable numbers and adequate UX.
+
+
 ## Updates (2026-05-05)
 
 ### Google sign-in for the web cabinet
@@ -1206,6 +1480,29 @@ Owner cabinet access status (2026-04-14):
 - backend `/cabinet` owner login flow is implemented
 - owner access uses email + one-time code
 - Android no longer exposes owner cabinet on the main screen; it opens `/cabinet` from the drawer menu instead
+
+Frontend/cabinet/accounting status update (2026-05-10):
+- public plan tabs were polished on both `website/index.html` and `website/pay.html`
+  - `index.html`: mobile plan tabs are now full-width rows instead of left-stuck pills
+  - `pay.html`: desktop checkout plan tabs are now a three-column selector; mobile keeps full-width rows
+- cabinet subscription card was simplified
+  - removed the redundant `Подписка` title
+  - plan details now appear above the large remaining-days number
+  - multi-member cabinets always show the remaining-days number
+- cabinet member/device cards were simplified
+  - removed `Основное` / `Устройство` pills
+  - bound devices no longer show install/activation help
+  - pending-activation devices still show install links, token, activation URL, and copy actions
+  - owner device deletion remains blocked; non-owner devices can still be deleted
+- traffic accounting was made more durable
+  - added DB-backed `device_traffic_ledger` append-only deltas
+  - added `device_traffic_totals` fast per-device totals split by `free` / `paid`
+  - health-monitor now records Xray uplink/downlink separately
+  - `/status/:xray_uuid` reads persisted device totals and adds the live unsaved delta from the current VPS
+  - this makes user-visible used traffic survive VPS switches after monitor sampling
+- important follow-up: product-plan-specific traffic caps are not wired yet
+  - `/status` still uses `FREE_TIER_TRAFFIC_CAP_MB` / `PAID_TIER_TRAFFIC_CAP_MB`
+  - it does not yet use the cabinet product-plan caps (`125GB`, `500GB`, `2TB`)
 
 **Security constraints**:
 - OTP is 4 digits, expires in 10 min, single-use

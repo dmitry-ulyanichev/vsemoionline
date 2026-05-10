@@ -63,6 +63,19 @@ class CabinetActivity : BaseActivity() {
         val activationUrl: String?,
     )
 
+    private data class CabinetProductPlan(
+        val label: String,
+        val deviceLimit: Int,
+        val usedSlots: Int,
+        val trafficLabel: String,
+        val trafficUsedLabel: String,
+        val trafficUsedPct: Int,
+        val isFull: Boolean,
+        val nextLabel: String?,
+        val nextDeviceLimit: Int,
+        val nextTrafficLabel: String?,
+    )
+
     private data class CabinetHistoryEntry(
         val dateLabel: String,
         val descriptionHtml: String,
@@ -105,6 +118,7 @@ class CabinetActivity : BaseActivity() {
     }
 
     private var members: List<CabinetMember> = emptyList()
+    private var productPlan: CabinetProductPlan? = null
     private var hasChanged = false
     private var attemptedTrustedDeviceSession = false
     private var historyFilter = "payment"
@@ -474,12 +488,14 @@ class CabinetActivity : BaseActivity() {
                 val family = getJson("/cabinet/api/family").json
                 val summary = family.optJSONObject("family")
                 val loadedMembers = parseMembers(family)
+                val loadedProductPlan = parseProductPlan(family)
                 val lastPaymentDate = runCatching {
                     parseLatestPaymentDate(getJson("/cabinet/api/history?filter=payment&limit=1").json)
                 }.getOrNull()
                 withContext(Dispatchers.Main) {
                     setBusy(false)
                     members = loadedMembers
+                    productPlan = loadedProductPlan
                     attemptedTrustedDeviceSession = false
                     renderCabinet(summary, lastPaymentDate)
                     showContentState()
@@ -595,6 +611,23 @@ class CabinetActivity : BaseActivity() {
         return result
     }
 
+    private fun parseProductPlan(family: JSONObject): CabinetProductPlan? {
+        val plan = family.optJSONObject("product_plan") ?: return null
+        val next = plan.optJSONObject("next_plan")
+        return CabinetProductPlan(
+            label = plan.optString("label").takeIf { it.isNotBlank() } ?: return null,
+            deviceLimit = plan.optInt("device_limit", 0),
+            usedSlots = plan.optInt("used_slots", members.size),
+            trafficLabel = plan.optString("traffic_label").takeIf { it.isNotBlank() } ?: "",
+            trafficUsedLabel = plan.optString("traffic_used_label").takeIf { it.isNotBlank() } ?: "0 МБ",
+            trafficUsedPct = plan.optInt("traffic_used_pct", 0).coerceIn(0, 100),
+            isFull = plan.optBoolean("is_full", false),
+            nextLabel = next?.optString("label")?.takeIf { it.isNotBlank() },
+            nextDeviceLimit = next?.optInt("device_limit", 0) ?: 0,
+            nextTrafficLabel = next?.optString("traffic_label")?.takeIf { it.isNotBlank() },
+        )
+    }
+
     private fun parseLatestPaymentDate(history: JSONObject): String? {
         return history.optJSONArray("items")
             ?.optJSONObject(0)
@@ -604,10 +637,13 @@ class CabinetActivity : BaseActivity() {
 
     private fun renderCabinet(summary: JSONObject?, lastPaymentDate: String?) {
         val owner = members.firstOrNull { it.role == "owner" }
-        val depositDays = summary?.optDouble("paid_days_balance", 0.0)?.toInt() ?: 0
         val ownerDays = owner?.daysRemaining ?: 0
         val isSingleMember = members.size <= 1
 
+        binding.layoutCabinetPlanSummary.removeAllViews()
+        productPlan?.let {
+            binding.layoutCabinetPlanSummary.addView(buildPlanSummaryView(it))
+        }
         binding.layoutCabinetDaysHero.visibility = if (isSingleMember) View.VISIBLE else View.GONE
         (binding.layoutCabinetSubscriptionStats.layoutParams as? LinearLayout.LayoutParams)?.let {
             it.topMargin = if (isSingleMember) dp(22) else dp(14)
@@ -621,25 +657,111 @@ class CabinetActivity : BaseActivity() {
             getColor(if (ownerDays > 0) R.color.vsm_sub_ok else R.color.vsm_sub_urgent)
         )
         binding.tvCabinetLastPayment.text = lastPaymentDate ?: getString(R.string.vsm_cabinet_no_payment_date)
-        val memberDays = members.map { it.daysRemaining }
-        val totalFamilyDays = memberDays.sum() + depositDays
-        val evenBase = if (members.isNotEmpty()) totalFamilyDays / members.size else 0
-        val evenRem = if (members.isNotEmpty()) totalFamilyDays % members.size else 0
-        val needsRedistribution = members.size > 1 && members.indices.any { i ->
-            memberDays[i] != evenBase + if (i < evenRem) 1 else 0
-        }
-        if (depositDays > 0) {
-            binding.tvCabinetDepositTitle.text = getString(R.string.vsm_cabinet_distribution_title_format, depositDays)
-            binding.tvCabinetDepositBody.setText(R.string.vsm_cabinet_distribution_body)
-        } else {
-            binding.tvCabinetDepositTitle.setText(R.string.vsm_cabinet_distribution_title_rebalance)
-            binding.tvCabinetDepositBody.setText(R.string.vsm_cabinet_distribution_body_rebalance)
-        }
-        binding.layoutCabinetDistribution.visibility = if (needsRedistribution) View.VISIBLE else View.GONE
+        binding.layoutCabinetDistribution.visibility = View.GONE
 
         binding.llCabinetMembers.removeAllViews()
         members.forEach { member ->
             binding.llCabinetMembers.addView(buildMemberView(member))
+        }
+    }
+
+    private fun buildPlanSummaryView(plan: CabinetProductPlan): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
+
+            addView(TextView(this@CabinetActivity).apply {
+                text = plan.label
+                setTextColor(getColor(R.color.vsm_restore_card_title))
+                textSize = 18f
+                typeface = Typeface.DEFAULT_BOLD
+            })
+            addView(TextView(this@CabinetActivity).apply {
+                text = "${plan.trafficLabel} · до ${plan.deviceLimit} устройств"
+                setTextColor(getColor(R.color.vsm_restore_card_body))
+                textSize = 14f
+                setPadding(0, dp(5), 0, 0)
+            })
+            addView(LinearLayout(this@CabinetActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(0, dp(14), 0, 0)
+                addView(buildPlanMeter(
+                    label = getString(R.string.vsm_cabinet_devices_meter),
+                    value = getString(R.string.vsm_cabinet_devices_used_format, plan.usedSlots, plan.deviceLimit),
+                    pct = if (plan.deviceLimit > 0) ((plan.usedSlots * 100) / plan.deviceLimit).coerceIn(0, 100) else 0,
+                ))
+                addView(buildPlanMeter(
+                    label = getString(R.string.vsm_cabinet_traffic_meter),
+                    value = getString(
+                        R.string.vsm_cabinet_traffic_used_format,
+                        plan.trafficUsedLabel,
+                        plan.trafficLabel.replace("/мес", ""),
+                    ),
+                    pct = plan.trafficUsedPct,
+                ).apply {
+                    (layoutParams as LinearLayout.LayoutParams).topMargin = dp(10)
+                })
+            })
+            if (plan.isFull && !plan.nextLabel.isNullOrBlank()) {
+                addView(TextView(this@CabinetActivity).apply {
+                    text = "Пакет заполнен. Чтобы добавить ещё одно устройство, перейдите на «${plan.nextLabel}»: до ${plan.nextDeviceLimit} устройств, ${plan.nextTrafficLabel ?: ""}."
+                    setTextColor(getColor(R.color.vsm_traffic_amber))
+                    textSize = 13f
+                    typeface = Typeface.DEFAULT_BOLD
+                    setPadding(0, dp(10), 0, 0)
+                })
+            }
+        }
+    }
+
+    private fun buildPlanMeter(label: String, value: String, pct: Int): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundResource(R.drawable.cabinet_inner_card_bg)
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
+            addView(LinearLayout(this@CabinetActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(TextView(this@CabinetActivity).apply {
+                    text = label
+                    setTextColor(getColor(R.color.vsm_restore_card_body))
+                    textSize = 12f
+                    typeface = Typeface.DEFAULT_BOLD
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                })
+                addView(TextView(this@CabinetActivity).apply {
+                    text = value
+                    setTextColor(getColor(R.color.vsm_restore_card_title))
+                    textSize = 12f
+                    typeface = Typeface.DEFAULT_BOLD
+                })
+            })
+            addView(FrameLayout(this@CabinetActivity).apply {
+                setBackgroundResource(R.drawable.cabinet_meter_track_bg)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    dp(6),
+                ).apply {
+                    topMargin = dp(9)
+                }
+                addView(View(this@CabinetActivity).apply {
+                    setBackgroundResource(R.drawable.cabinet_meter_fill_bg)
+                    layoutParams = FrameLayout.LayoutParams(0, FrameLayout.LayoutParams.MATCH_PARENT)
+                })
+                post {
+                    val fill = getChildAt(0)
+                    fill.layoutParams = (fill.layoutParams as FrameLayout.LayoutParams).apply {
+                        width = ((width * pct.coerceIn(0, 100)) / 100f).toInt()
+                    }
+                }
+            })
         }
     }
 
@@ -717,7 +839,6 @@ class CabinetActivity : BaseActivity() {
             }
         })
         header.addView(nameRow)
-        header.addView(buildMemberControls(member))
         card.addView(header)
 
         val status = when {
@@ -731,7 +852,9 @@ class CabinetActivity : BaseActivity() {
             setPadding(0, dp(16), 0, 0)
         })
 
-        addActivationViews(card, member)
+        if (hasActivation(member)) {
+            addActivationViews(card, member)
+        }
 
         if (!isOwner) {
             card.addView(buildDangerButton(R.string.vsm_cabinet_remove_member) { confirmRemoveMember(member) }.apply {
@@ -750,6 +873,10 @@ class CabinetActivity : BaseActivity() {
             wrapper.getChildAt(0)?.bringToFront()
         }
         return wrapper
+    }
+
+    private fun hasActivation(member: CabinetMember): Boolean {
+        return member.activationCode != null || member.activationRaw != null || member.activationUrl != null
     }
 
     private fun renderHistoryItems(items: List<CabinetHistoryEntry>) {
@@ -1016,7 +1143,6 @@ class CabinetActivity : BaseActivity() {
         if (member.activationUrl != null) {
             activationBox.addView(buildLinkCopyRow(member.activationUrl))
         }
-        activationBox.addView(buildOutlineButton(R.string.vsm_cabinet_reissue_code) { reissueActivation(member) })
         card.addView(activationBox)
     }
 

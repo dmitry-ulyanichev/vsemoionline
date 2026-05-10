@@ -129,11 +129,19 @@
                     android:textSize="17sp"
                     android:textStyle="bold" />
 
+                <LinearLayout
+                    android:id="@+id/layoutPaymentPlanTabs"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:baselineAligned="false"
+                    android:orientation="horizontal" />
+
                 <RadioGroup
                     android:id="@+id/rgPaymentPlans"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="12dp"
                     android:orientation="vertical" />
 
                 <TextView

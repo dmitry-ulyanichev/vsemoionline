@@ -12,6 +12,26 @@ For a known device, if all provisioning URLs fail, the app now:
 - starts the VPN instead of showing “Could not connect”
 - still blocks true policy errors like 409 paid_session_active
 
+### Follow-up: restore cached server row after provisioning outage
+**Files**: `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`
+
+Fixed an app-open edge case where the UI could show a dash in the server row during a provisioning outage even though a cached config was still available.
+
+The app no longer clears the visible server name before re-provisioning succeeds. If re-provisioning fails, it refreshes the local MMKV server list or re-imports the stored `vless_uri`, then updates the subscription and server row from the cached data. The server row also falls back to the selected cached profile remarks/server address when older local state does not have `server_zone` saved.
+
+### Validation
+- Android: `./gradlew :app:compilePlaystoreDebugKotlin` — passed
+
+### Follow-up: faster cached connect during provisioning outage
+**Files**: `V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt`
+
+Changed the connect flow for known devices with a stored `vless_uri` so cached config is no longer delayed behind the full two-cycle provisioning fallback chain.
+
+On connect, the app now gives the last-working/direct provisioning URL one short refresh window before restoring and starting the cached config. Fresh devices still use the full fallback chain because they have no cache to start from. The fast refresh path also skips the slower post-provision status poll; status polling resumes after VPN start.
+
+### Validation
+- Android: `./gradlew :app:compilePlaystoreDebugKotlin` — passed
+
 ## Updates (2026-05-02) — Native Android cabinet and trusted-device cabinet session
 
 ### Android: native cabinet screen

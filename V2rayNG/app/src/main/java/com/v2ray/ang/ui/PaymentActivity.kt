@@ -2,10 +2,19 @@ package com.v2ray.ang.ui
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
+import android.text.style.RelativeSizeSpan
+import android.view.Gravity
 import android.util.Log
 import android.view.View
+import android.widget.LinearLayout
 import android.widget.RadioButton
+import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
@@ -31,7 +40,15 @@ class PaymentActivity : BaseActivity() {
     private data class Plan(
         val code: String,
         val label: String,
+        val productPlanCode: String,
+        val durationCode: String,
+        val durationLabel: String,
+        val deviceLimit: Int,
+        val trafficLabel: String,
+        val months: Int,
         val priceLabel: String,
+        val oldPriceLabel: String,
+        val saveText: String,
         val currency: String,
         val billingMode: String,
         val available: Boolean,
@@ -50,15 +67,51 @@ class PaymentActivity : BaseActivity() {
         SUCCESS
     }
 
+    private data class PlanGroup(
+        val code: String,
+        val labelRes: Int,
+        val deviceHintRes: Int,
+        val trafficHintRes: Int,
+    )
+
     companion object {
         private const val PREFS_NAME = "vsemoionline_prefs"
         private const val PREF_BACKEND_BASE_URL = "backend_base_url"
         private const val PREF_FAMILY_ROLE = "family_role"
+        private const val PREF_PLAN = "plan"
+        private const val PREF_PAID_DAYS_REMAINING = "paid_days_remaining"
+        private const val PREF_TRAFFIC_TOTAL_GB = "traffic_total_gb"
+        private const val PREF_PRODUCT_PLAN_CODE = "product_plan_code"
+        private const val PREF_DURATION_CODE = "duration_code"
         private const val PRIMARY_PROVISION_URL = "https://vmonl.store/provision"
+    }
+
+    private val planGroups by lazy {
+        listOf(
+            PlanGroup(
+                code = "personal",
+                labelRes = R.string.vsm_payment_group_personal,
+                deviceHintRes = R.string.vsm_payment_group_personal_devices,
+                trafficHintRes = R.string.vsm_payment_group_personal_traffic,
+            ),
+            PlanGroup(
+                code = "family",
+                labelRes = R.string.vsm_payment_group_family,
+                deviceHintRes = R.string.vsm_payment_group_family_devices,
+                trafficHintRes = R.string.vsm_payment_group_family_traffic,
+            ),
+            PlanGroup(
+                code = "all_mine",
+                labelRes = R.string.vsm_payment_group_all_mine,
+                deviceHintRes = R.string.vsm_payment_group_all_mine_devices,
+                trafficHintRes = R.string.vsm_payment_group_all_mine_traffic,
+            ),
+        )
     }
 
     private var plans: List<Plan> = emptyList()
     private var methods: List<PaymentMethod> = emptyList()
+    private var selectedPlanGroupCode: String = "personal"
     private var selectedPlanCode: String = ""
     private var selectedMethodCode: String = ""
     private var currentPaymentId: String? = null
@@ -173,11 +226,26 @@ class PaymentActivity : BaseActivity() {
                 if (plansJson != null) {
                     for (index in 0 until plansJson.length()) {
                         val item = plansJson.optJSONObject(index) ?: continue
+                        val planCode = item.optString("code")
+                        val durationCode = item.optString("duration_code").ifBlank {
+                            durationCodeFromPlanCode(planCode)
+                        }
                         planItems += Plan(
-                            code = item.optString("code"),
-                            label = item.optString("label", item.optString("code")),
+                            code = planCode,
+                            label = item.optString("label", planCode),
+                            productPlanCode = item.optString("product_plan_code").ifBlank {
+                                productPlanCodeFromPlanCode(planCode)
+                            },
+                            durationCode = durationCode,
+                            durationLabel = item.optString("duration_label")
+                                .ifBlank { item.optString("label", planCode) },
+                            deviceLimit = item.optInt("device_limit", 0),
+                            trafficLabel = item.optString("traffic_label"),
+                            months = item.optInt("months", monthsFromDurationCode(durationCode)),
                             priceLabel = item.optString("price_label")
                                 .ifBlank { formatAmount(item.optString("amount"), item.optString("currency", "RUB")) },
+                            oldPriceLabel = item.optString("old_price_label"),
+                            saveText = item.optString("save_text").ifBlank { item.optString("badge") },
                             currency = item.optString("currency", selection?.optString("currency", "RUB") ?: "RUB"),
                             billingMode = item.optString("billing_mode", selection?.optString("billing_mode", "one_time") ?: "one_time"),
                             available = item.optBoolean("available", true),
@@ -201,8 +269,7 @@ class PaymentActivity : BaseActivity() {
                 withContext(Dispatchers.Main) {
                     plans = planItems.filter { it.code.isNotBlank() && it.available }
                     methods = methodItems.filter { it.code.isNotBlank() }
-                    selectedPlanCode = plans.firstOrNull { it.code == "3m" }?.code
-                        ?: plans.firstOrNull()?.code.orEmpty()
+                    applyInitialPlanSelection()
                     selectedMethodCode = selection?.optString("payment_method")
                         ?.takeIf { value -> methods.any { it.code == value } }
                         ?: methods.firstOrNull()?.code.orEmpty()
@@ -223,12 +290,22 @@ class PaymentActivity : BaseActivity() {
     }
 
     private fun renderOptions() {
+        renderPlanTabs()
+
+        val visiblePlans = plans
+            .filter { it.productPlanCode == selectedPlanGroupCode }
+            .sortedWith(compareBy<Plan> { it.months.takeIf { months -> months > 0 } ?: Int.MAX_VALUE }.thenBy { it.code })
+        val fallbackPlan = visiblePlans.firstOrNull()
+        if (fallbackPlan != null && visiblePlans.none { it.code == selectedPlanCode }) {
+            selectedPlanCode = fallbackPlan.code
+        }
+
         binding.rgPaymentPlans.setOnCheckedChangeListener(null)
         binding.rgPaymentPlans.removeAllViews()
-        plans.forEach { plan ->
+        visiblePlans.forEach { plan ->
             binding.rgPaymentPlans.addView(buildRadioButton(
                 id = View.generateViewId(),
-                text = "${plan.label}  •  ${plan.priceLabel}",
+                text = buildPlanOptionText(plan),
                 checked = plan.code == selectedPlanCode,
                 tag = plan.code,
             ))
@@ -260,6 +337,89 @@ class PaymentActivity : BaseActivity() {
         }
     }
 
+    private fun renderPlanTabs() {
+        binding.layoutPaymentPlanTabs.removeAllViews()
+        val availableGroups = planGroups.filter { group ->
+            plans.any { it.productPlanCode == group.code }
+        }.ifEmpty { planGroups }
+
+        if (availableGroups.none { it.code == selectedPlanGroupCode }) {
+            selectedPlanGroupCode = availableGroups.firstOrNull()?.code ?: "personal"
+        }
+
+        availableGroups.forEachIndexed { index, group ->
+            val tab = buildPlanTab(group, group.code == selectedPlanGroupCode)
+            val params = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                if (index > 0) marginStart = dp(7)
+            }
+            binding.layoutPaymentPlanTabs.addView(tab, params)
+        }
+    }
+
+    private fun buildPlanTab(group: PlanGroup, selected: Boolean): TextView {
+        val groupPlans = plans.filter { it.productPlanCode == group.code }
+        val samplePlan = groupPlans.firstOrNull()
+        val deviceHint = samplePlan?.deviceLimit
+            ?.takeIf { it > 0 }
+            ?.let { "до $it устройств" }
+            ?: getString(group.deviceHintRes)
+        val trafficHint = samplePlan?.trafficLabel
+            ?.takeIf { it.isNotBlank() }
+            ?.replace("/мес.", "/мес")
+            ?: getString(group.trafficHintRes)
+
+        val title = getString(group.labelRes)
+        val body = "$deviceHint\n$trafficHint"
+
+        return TextView(this).apply {
+            text = buildPlanTabText(title, body, selected)
+            gravity = Gravity.CENTER
+            minHeight = dp(78)
+            setPadding(dp(6), dp(8), dp(6), dp(8))
+            textSize = 11f
+            typeface = Typeface.DEFAULT_BOLD
+            setLineSpacing(0f, 1.05f)
+            background = roundedBackground(
+                fillColor = getColor(if (selected) R.color.vsm_pill_fill else R.color.vsm_surface2),
+                strokeColor = getColor(if (selected) R.color.vsm_cabinet_border_strong else R.color.vsm_border),
+                radiusDp = 14,
+            )
+            isSelected = selected
+            isEnabled = groupPlans.isNotEmpty()
+            alpha = if (isEnabled) 1f else 0.45f
+            setOnClickListener {
+                if (selectedPlanGroupCode != group.code) {
+                    selectedPlanGroupCode = group.code
+                    selectedPlanCode = plans
+                        .filter { it.productPlanCode == group.code }
+                        .minWithOrNull(compareBy<Plan> { it.months.takeIf { months -> months > 0 } ?: Int.MAX_VALUE }.thenBy { it.code })
+                        ?.code
+                        .orEmpty()
+                    renderOptions()
+                    setBusy(false)
+                }
+            }
+        }
+    }
+
+    private fun buildPlanTabText(title: String, body: String, selected: Boolean): SpannableString {
+        val text = "$title\n$body"
+        val titleColor = getColor(if (selected) R.color.vsm_link else R.color.vsm_restore_card_title)
+        val bodyColor = getColor(R.color.vsm_restore_card_hint)
+        return SpannableString(text).apply {
+            setSpan(ForegroundColorSpan(titleColor), 0, title.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            setSpan(ForegroundColorSpan(bodyColor), title.length + 1, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            setSpan(RelativeSizeSpan(0.9f), title.length + 1, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+    }
+
+    private fun buildPlanOptionText(plan: Plan): String {
+        val period = plan.durationLabel.ifBlank { plan.label }
+        val suffix = plan.saveText.takeIf { it.isNotBlank() && it != period }?.let { "\n$it" }.orEmpty()
+        val oldPrice = plan.oldPriceLabel.takeIf { it.isNotBlank() }?.let { "  ($it)" }.orEmpty()
+        return "$period  •  ${plan.priceLabel}$oldPrice$suffix"
+    }
+
     private fun buildRadioButton(id: Int, text: String, checked: Boolean, tag: String): RadioButton {
         return RadioButton(this).apply {
             this.id = id
@@ -269,6 +429,87 @@ class PaymentActivity : BaseActivity() {
             textSize = 14f
             setTextColor(getColor(R.color.vsm_restore_card_title))
             setPadding(dp(10), dp(10), dp(10), dp(10))
+        }
+    }
+
+    private fun applyInitialPlanSelection() {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val currentPlan = prefs.getString(PREF_PLAN, "free") ?: "free"
+        val preferredGroup = if (currentPlan == "free") {
+            "personal"
+        } else {
+            prefs.getString(PREF_PRODUCT_PLAN_CODE, null)
+                ?.takeIf { plans.any { plan -> plan.productPlanCode == it } }
+                ?: inferProductPlanFromTraffic(prefs.getFloat(PREF_TRAFFIC_TOTAL_GB, 0f))
+        }
+        val preferredDuration = if (currentPlan == "free") {
+            "1m"
+        } else {
+            prefs.getString(PREF_DURATION_CODE, null)
+                ?.takeIf { it.isNotBlank() }
+                ?: inferDurationFromDays(prefs.getInt(PREF_PAID_DAYS_REMAINING, 0))
+        }
+
+        selectedPlanGroupCode = preferredGroup.takeIf { group ->
+            plans.any { it.productPlanCode == group }
+        } ?: "personal"
+        selectedPlanCode = plans.firstOrNull {
+            it.productPlanCode == selectedPlanGroupCode && it.durationCode == preferredDuration
+        }?.code
+            ?: plans.firstOrNull {
+                it.productPlanCode == selectedPlanGroupCode && it.durationCode == "1m"
+            }?.code
+            ?: plans.firstOrNull { it.productPlanCode == selectedPlanGroupCode }?.code
+            ?: plans.firstOrNull()?.also { selectedPlanGroupCode = it.productPlanCode }?.code
+            ?: ""
+    }
+
+    private fun inferProductPlanFromTraffic(trafficTotalGb: Float): String {
+        return when {
+            trafficTotalGb >= 1500f -> "all_mine"
+            trafficTotalGb >= 350f -> "family"
+            else -> "personal"
+        }
+    }
+
+    private fun inferDurationFromDays(daysRemaining: Int): String {
+        return when {
+            daysRemaining > 200 -> "12m"
+            daysRemaining > 100 -> "6m"
+            daysRemaining > 45 -> "3m"
+            else -> "1m"
+        }
+    }
+
+    private fun productPlanCodeFromPlanCode(code: String): String {
+        return when {
+            code.startsWith("all_mine_") -> "all_mine"
+            code.startsWith("family_") -> "family"
+            code.startsWith("personal_") -> "personal"
+            else -> "personal"
+        }
+    }
+
+    private fun durationCodeFromPlanCode(code: String): String {
+        return Regex("(1m|3m|6m|12m)$").find(code)?.value ?: code
+    }
+
+    private fun monthsFromDurationCode(durationCode: String): Int {
+        return when (durationCode) {
+            "1m" -> 1
+            "3m" -> 3
+            "6m" -> 6
+            "12m" -> 12
+            else -> 0
+        }
+    }
+
+    private fun roundedBackground(fillColor: Int, strokeColor: Int, radiusDp: Int): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(radiusDp).toFloat()
+            setColor(fillColor)
+            setStroke(dp(1), strokeColor)
         }
     }
 
@@ -353,6 +594,12 @@ class PaymentActivity : BaseActivity() {
     }
 
     private fun showConfirmedState() {
+        plans.firstOrNull { it.code == selectedPlanCode }?.let { plan ->
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putString(PREF_PRODUCT_PLAN_CODE, plan.productPlanCode)
+                .putString(PREF_DURATION_CODE, plan.durationCode)
+                .apply()
+        }
         updateHeader(R.string.vsm_payment_success_title, R.string.vsm_payment_success_intro)
         binding.layoutPaymentCard.visibility = View.GONE
         binding.layoutPaymentProcessing.visibility = View.VISIBLE

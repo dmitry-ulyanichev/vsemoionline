@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Payment plan tabs mockup</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #eef2f7;
+      color: #1f2933;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    .stage {
+      min-height: 100vh;
+      padding: 24px 12px 32px;
+    }
+
+    .heading {
+      width: min(100%, 980px);
+      margin: 0 auto 18px;
+    }
+
+    .heading h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.15;
+    }
+
+    .heading p {
+      max-width: 720px;
+      margin: 8px 0 0;
+      color: #5f6f82;
+    }
+
+    .scenario-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .scenario-row::-webkit-scrollbar {
+      display: none;
+    }
+
+    .scenario-chip {
+      min-height: 36px;
+      border: 1px solid #cfd8e3;
+      border-radius: 999px;
+      background: #ffffff;
+      color: #344054;
+      padding: 8px 12px;
+      white-space: nowrap;
+      font-weight: 750;
+    }
+
+    .scenario-chip.is-active {
+      border-color: #1565c0;
+      background: #1565c0;
+      color: #ffffff;
+    }
+
+    .phones {
+      width: min(100%, 980px);
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 390px));
+      gap: 24px;
+      align-items: start;
+      justify-content: center;
+    }
+
+    .phone {
+      overflow: hidden;
+      border: 1px solid rgba(25, 32, 44, 0.12);
+      border-radius: 28px;
+      box-shadow: 0 24px 70px rgba(15, 23, 42, 0.18);
+    }
+
+    .phone[data-theme="dark"] {
+      --toolbar: #0f1222;
+      --page: #262c4a;
+      --hero-text: #ffffff;
+      --hero-body: #e6eaf3;
+      --surface: #1f2344;
+      --surface-2: #262c4a;
+      --surface-3: #2e3558;
+      --border: #2e3558;
+      --border-strong: rgba(144, 202, 249, 0.34);
+      --text: #e8eaf0;
+      --muted: #c2cbd6;
+      --muted-2: #8fa0b4;
+      --link: #90caf9;
+      --mint: #7dc4a0;
+      --primary: #1565c0;
+      --primary-soft: rgba(144, 202, 249, 0.12);
+      --info-bg: #163a66;
+      --input-bg: #fafbfc;
+      --input-text: #1f2933;
+      --shadow: rgba(3, 8, 18, 0.34);
+    }
+
+    .phone[data-theme="light"] {
+      --toolbar: #1f2344;
+      --page: #f5f5f5;
+      --hero-text: #ffffff;
+      --hero-body: #e6eaf3;
+      --surface: #fafbfc;
+      --surface-2: #ffffff;
+      --surface-3: #e8eaf6;
+      --border: #e0e0e0;
+      --border-strong: rgba(21, 101, 192, 0.28);
+      --text: #212121;
+      --muted: #616161;
+      --muted-2: #757575;
+      --link: #1565c0;
+      --mint: #7dc4a0;
+      --primary: #1565c0;
+      --primary-soft: rgba(21, 101, 192, 0.08);
+      --info-bg: #eaf2ff;
+      --input-bg: #ffffff;
+      --input-text: #263238;
+      --shadow: rgba(15, 23, 42, 0.10);
+    }
+
+    .system-bar {
+      height: 26px;
+      padding: 7px 18px 0;
+      display: flex;
+      justify-content: space-between;
+      background: var(--toolbar);
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .toolbar {
+      height: 52px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--toolbar);
+      border-bottom: 1px solid rgba(125, 196, 160, 0.18);
+      color: #ffffff;
+    }
+
+    .back {
+      width: 32px;
+      height: 32px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: #ffffff;
+      display: grid;
+      place-items: center;
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    .toolbar-title {
+      font-size: 17px;
+      font-weight: 750;
+    }
+
+    .screen {
+      background: var(--page);
+      color: var(--text);
+    }
+
+    .hero {
+      padding: 18px 16px 20px;
+      background:
+        radial-gradient(circle at 86% 12%, rgba(125, 196, 160, 0.22), rgba(125, 196, 160, 0) 220px),
+        var(--toolbar);
+      border-bottom: 1px solid rgba(125, 196, 160, 0.22);
+    }
+
+    .eyebrow {
+      color: var(--mint);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .hero h2 {
+      margin: 8px 0 0;
+      color: var(--hero-text);
+      font-size: 24px;
+      line-height: 1.12;
+    }
+
+    .hero p {
+      margin: 10px 0 0;
+      color: var(--hero-body);
+      font-size: 14px;
+    }
+
+    .content {
+      padding: 14px 16px 26px;
+    }
+
+    .notice {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: var(--info-bg);
+      color: var(--link);
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    .card {
+      margin-top: 14px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--surface);
+      box-shadow: 0 12px 30px var(--shadow);
+    }
+
+    .section-title {
+      margin: 0;
+      color: var(--text);
+      font-size: 17px;
+      font-weight: 800;
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 7px;
+      margin-top: 12px;
+    }
+
+    .tab {
+      min-width: 0;
+      min-height: 78px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface-2);
+      color: var(--muted);
+      padding: 9px 6px 8px;
+      text-align: center;
+    }
+
+    .tab strong,
+    .tab span {
+      display: block;
+      overflow-wrap: anywhere;
+    }
+
+    .tab strong {
+      color: var(--text);
+      font-size: 12px;
+      line-height: 1.1;
+    }
+
+    .tab span {
+      margin-top: 4px;
+      color: var(--muted-2);
+      font-size: 10px;
+      line-height: 1.2;
+    }
+
+    .tab.is-active {
+      border-color: var(--border-strong);
+      background: var(--primary-soft);
+      box-shadow: inset 0 0 0 1px var(--border-strong);
+    }
+
+    .tab.is-active strong {
+      color: var(--link);
+    }
+
+    .plans {
+      margin-top: 12px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .plan {
+      min-height: 58px;
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 11px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface-2);
+      color: var(--text);
+    }
+
+    .radio {
+      width: 22px;
+      height: 22px;
+      border: 2px solid currentColor;
+      border-radius: 50%;
+      color: var(--muted);
+      position: relative;
+    }
+
+    .plan.is-selected {
+      border-color: var(--border-strong);
+      background: var(--primary-soft);
+    }
+
+    .plan.is-selected .radio {
+      color: var(--link);
+    }
+
+    .plan.is-selected .radio::after {
+      content: "";
+      position: absolute;
+      inset: 4px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .period {
+      display: block;
+      font-size: 14px;
+      font-weight: 750;
+    }
+
+    .save {
+      display: block;
+      min-height: 17px;
+      margin-top: 2px;
+      color: var(--muted-2);
+      font-size: 12px;
+    }
+
+    .price {
+      text-align: right;
+      white-space: nowrap;
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .old-price {
+      display: block;
+      color: var(--muted-2);
+      font-size: 11px;
+      font-weight: 650;
+      text-decoration: line-through;
+    }
+
+    .method {
+      margin-top: 16px;
+    }
+
+    .method-card {
+      min-height: 58px;
+      margin-top: 9px;
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      padding: 10px 11px;
+      border: 1px solid var(--border-strong);
+      border-radius: 14px;
+      background: var(--primary-soft);
+    }
+
+    .method-card .radio {
+      color: var(--link);
+    }
+
+    .method-card .radio::after {
+      content: "";
+      position: absolute;
+      inset: 4px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .method-title {
+      display: block;
+      color: var(--text);
+      font-weight: 750;
+    }
+
+    .method-desc {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .email {
+      margin-top: 16px;
+    }
+
+    .email label {
+      display: block;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .input {
+      width: 100%;
+      min-height: 48px;
+      margin-top: 8px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--input-bg);
+      color: var(--input-text);
+      padding: 13px 14px;
+      font-size: 15px;
+    }
+
+    .cta {
+      width: 100%;
+      min-height: 48px;
+      margin-top: 14px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--primary);
+      color: #ffffff;
+      padding: 14px;
+      font-weight: 800;
+    }
+
+    .footnote {
+      margin: 16px 0 0;
+      color: var(--muted-2);
+      font-size: 12px;
+    }
+
+    @media (max-width: 860px) {
+      .phones {
+        grid-template-columns: minmax(0, 390px);
+      }
+    }
+
+    @media (max-width: 360px) {
+      .content,
+      .hero {
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+
+      .card {
+        padding: 12px;
+      }
+
+      .tab {
+        min-height: 82px;
+        padding-left: 4px;
+        padding-right: 4px;
+      }
+
+      .period,
+      .price {
+        font-size: 13px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage">
+    <div class="heading">
+      <h1>Оплата подписки: табы тарифов</h1>
+      <p>Макет показывает тот же экран в dark и light вариантах. Сценарии ниже демонстрируют автопредвыбор: free ведёт на Личный / 1 месяц, платные планы сохраняют группу и оплаченный период.</p>
+      <div class="scenario-row" role="group" aria-label="Сценарий текущей подписки">
+        <button class="scenario-chip is-active" type="button" data-scenario="free">Free: Личный / 1 месяц</button>
+        <button class="scenario-chip" type="button" data-scenario="family6">Моя Семья / 6 месяцев</button>
+        <button class="scenario-chip" type="button" data-scenario="all12">Все Мои / 12 месяцев</button>
+      </div>
+    </div>
+
+    <section class="phones" aria-label="Варианты темы">
+      <article class="phone" data-theme="dark">
+        <div class="system-bar"><span>16:50</span><span>5G 82%</span></div>
+        <div class="toolbar">
+          <button class="back" type="button" aria-label="Назад">‹</button>
+          <div class="toolbar-title">Все Мои Онлайн</div>
+        </div>
+        <div class="screen">
+          <div class="hero">
+            <div class="eyebrow">Безопасная оплата</div>
+            <h2>Оплатить подписку</h2>
+            <p>Выберите срок, способ оплаты и email для восстановления доступа. Платёжные реквизиты вводятся только на стороне платёжного провайдера.</p>
+          </div>
+          <div class="content">
+            <div class="notice">До сих пор за вас платил другой пользователь. После оплаты вы станете самостоятельным пользователем.</div>
+            <div class="card payment-card"></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone" data-theme="light">
+        <div class="system-bar"><span>16:50</span><span>5G 82%</span></div>
+        <div class="toolbar">
+          <button class="back" type="button" aria-label="Назад">‹</button>
+          <div class="toolbar-title">Все Мои Онлайн</div>
+        </div>
+        <div class="screen">
+          <div class="hero">
+            <div class="eyebrow">Безопасная оплата</div>
+            <h2>Оплатить подписку</h2>
+            <p>Выберите срок, способ оплаты и email для восстановления доступа. Платёжные реквизиты вводятся только на стороне платёжного провайдера.</p>
+          </div>
+          <div class="content">
+            <div class="notice">До сих пор за вас платил другой пользователь. После оплаты вы станете самостоятельным пользователем.</div>
+            <div class="card payment-card"></div>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const groups = [
+      { code: "personal", label: "Личный", devices: "до 2 устройств", traffic: "125 ГБ/мес" },
+      { code: "family", label: "Моя Семья", devices: "до 5 устройств", traffic: "500 ГБ/мес" },
+      { code: "all", label: "Все Мои", devices: "до 10 устройств", traffic: "2 ТБ/мес" }
+    ];
+
+    const prices = {
+      personal: [
+        ["1m", "1 месяц", "99 ₽", ""],
+        ["3m", "3 месяца", "249 ₽", "−16%"],
+        ["6m", "6 месяцев", "499 ₽", "−16%"],
+        ["12m", "12 месяцев", "999 ₽", "−16%"]
+      ],
+      family: [
+        ["1m", "1 месяц", "199 ₽", ""],
+        ["3m", "3 месяца", "599 ₽", ""],
+        ["6m", "6 месяцев", "999 ₽", "−16%"],
+        ["12m", "12 месяцев", "1 799 ₽", "−25%"]
+      ],
+      all: [
+        ["1m", "1 месяц", "399 ₽", ""],
+        ["3m", "3 месяца", "1 099 ₽", "−8%"],
+        ["6m", "6 месяцев", "1 999 ₽", "−16%"],
+        ["12m", "12 месяцев", "3 799 ₽", "−21%"]
+      ]
+    };
+
+    const scenarios = {
+      free: { group: "personal", period: "1m" },
+      family6: { group: "family", period: "6m" },
+      all12: { group: "all", period: "12m" }
+    };
+
+    let selection = { ...scenarios.free };
+
+    function renderCards() {
+      document.querySelectorAll(".payment-card").forEach((card) => {
+        const activeGroup = groups.find((group) => group.code === selection.group) || groups[0];
+        card.innerHTML = `
+          <h3 class="section-title">План и срок подписки</h3>
+          <div class="tabs">
+            ${groups.map((group) => `
+              <button class="tab ${group.code === selection.group ? "is-active" : ""}" type="button" data-group="${group.code}">
+                <strong>${group.label}</strong>
+                <span>${group.devices}</span>
+                <span>${group.traffic}</span>
+              </button>
+            `).join("")}
+          </div>
+          <div class="plans">
+            ${prices[activeGroup.code].map((plan) => `
+              <button class="plan ${plan[0] === selection.period ? "is-selected" : ""}" type="button" data-period="${plan[0]}">
+                <span class="radio" aria-hidden="true"></span>
+                <span>
+                  <span class="period">${plan[1]}</span>
+                  <span class="save">${plan[3]}</span>
+                </span>
+                <span class="price">
+                  ${plan[3] ? `<span class="old-price">${oldPrice(activeGroup.code, plan[0])}</span>` : ""}
+                  ${plan[2]}
+                </span>
+              </button>
+            `).join("")}
+          </div>
+
+          <div class="method">
+            <h3 class="section-title">Способ оплаты</h3>
+            <div class="method-card">
+              <span class="radio" aria-hidden="true"></span>
+              <span>
+                <span class="method-title">Банковская карта</span>
+                <span class="method-desc">Оплата картой в валюте выбранного тарифа</span>
+              </span>
+            </div>
+          </div>
+
+          <div class="email">
+            <label>Email для восстановления</label>
+            <input class="input" type="email" value="client@example.com" aria-label="Email">
+          </div>
+          <button class="cta" type="button">Перейти к оплате</button>
+          <p class="footnote">После создания платежа приложение откроет защищённую страницу провайдера и будет проверять подтверждение в фоне.</p>
+        `;
+      });
+
+      document.querySelectorAll(".tab").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          selection = { group: tab.dataset.group, period: "1m" };
+          syncScenarioChips(null);
+          renderCards();
+        });
+      });
+
+      document.querySelectorAll(".plan").forEach((plan) => {
+        plan.addEventListener("click", () => {
+          selection = { ...selection, period: plan.dataset.period };
+          syncScenarioChips(null);
+          renderCards();
+        });
+      });
+    }
+
+    function oldPrice(group, period) {
+      const values = {
+        personal: { "3m": "297 ₽", "6m": "594 ₽", "12m": "1 188 ₽" },
+        family: { "6m": "1 194 ₽", "12m": "2 388 ₽" },
+        all: { "3m": "1 197 ₽", "6m": "2 394 ₽", "12m": "4 788 ₽" }
+      };
+      return values[group] && values[group][period] ? values[group][period] : "";
+    }
+
+    function syncScenarioChips(activeKey) {
+      document.querySelectorAll(".scenario-chip").forEach((chip) => {
+        chip.classList.toggle("is-active", chip.dataset.scenario === activeKey);
+      });
+    }
+
+    document.querySelectorAll(".scenario-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        selection = { ...scenarios[chip.dataset.scenario] };
+        syncScenarioChips(chip.dataset.scenario);
+        renderCards();
+      });
+    });
+
+    renderCards();
+  </script>
+</body>
+</html>

@@ -444,7 +444,16 @@
     <string name="vsm_payment_title">Оплатить подписку</string>
     <string name="vsm_payment_eyebrow">Безопасная оплата</string>
     <string name="vsm_payment_intro">Выберите срок, способ оплаты и email для восстановления доступа. Платёжные реквизиты вводятся только на стороне платёжного провайдера.</string>
-    <string name="vsm_payment_plan_label">Срок подписки</string>
+    <string name="vsm_payment_plan_label">План и срок подписки</string>
+    <string name="vsm_payment_group_personal">Личный</string>
+    <string name="vsm_payment_group_family">Моя Семья</string>
+    <string name="vsm_payment_group_all_mine">Все Мои</string>
+    <string name="vsm_payment_group_personal_devices">до 2 устройств</string>
+    <string name="vsm_payment_group_family_devices">до 5 устройств</string>
+    <string name="vsm_payment_group_all_mine_devices">до 10 устройств</string>
+    <string name="vsm_payment_group_personal_traffic">125 ГБ/мес</string>
+    <string name="vsm_payment_group_family_traffic">500 ГБ/мес</string>
+    <string name="vsm_payment_group_all_mine_traffic">2 ТБ/мес</string>
     <string name="vsm_payment_method_label">Способ оплаты</string>
     <string name="vsm_payment_create">Перейти к оплате</string>
     <string name="vsm_payment_open_checkout_hint">Страница оплаты не открылась?</string>

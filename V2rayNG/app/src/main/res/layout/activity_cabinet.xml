@@ -241,15 +241,11 @@
                     android:orientation="vertical"
                     android:padding="18dp">
 
-                    <TextView
+                    <LinearLayout
+                        android:id="@+id/layoutCabinetPlanSummary"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:letterSpacing="0.08"
-                        android:text="@string/vsm_cabinet_subscription_title"
-                        android:textAllCaps="true"
-                        android:textColor="@color/vsm_restore_card_body"
-                        android:textSize="11sp"
-                        android:textStyle="bold" />
+                        android:orientation="vertical" />
 
                     <LinearLayout
                         android:id="@+id/layoutCabinetDaysHero"
